@@ -38,6 +38,7 @@ Usage:
   draftsmith reindex [flags]          rebuild the dashboard's SQLite index from the archive
   draftsmith report  [flags]          print a markdown report from the archive
   draftsmith export  [flags]          dump per-game features as JSON lines
+  draftsmith watch   [flags]          follow the local League client (champ select helper)
   draftsmith meta tools [--schema]    list OP.GG's meta tools
   draftsmith meta call <tool> [json]  call an OP.GG tool and cache the result
   draftsmith version
@@ -48,6 +49,7 @@ current directory:
   DRAFTSMITH_RIOT_ID    Name#TAG
   DRAFTSMITH_PLATFORM   na1, euw1, kr, ... (default na1)
   DRAFTSMITH_DATA       archive directory (default ./data)
+  DRAFTSMITH_LEAGUE_DIR League install directory, for watch
 
 Run "draftsmith <command> -h" for command flags.
 `
@@ -73,6 +75,8 @@ func main() {
 		err = cmdReport(os.Args[2:])
 	case "export":
 		err = cmdExport(os.Args[2:])
+	case "watch":
+		err = cmdWatch(ctx, os.Args[2:])
 	case "meta":
 		err = cmdMeta(ctx, os.Args[2:])
 	case "version":
