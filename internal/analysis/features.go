@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Rojoloco04/lolstats/internal/riot"
+	"github.com/rojoloco04/draftsmith/internal/riot"
 )
 
 // Game is one ranked game from the tracked player's point of view.

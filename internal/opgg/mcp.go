@@ -71,7 +71,7 @@ func (c *Client) Init(ctx context.Context) error {
 	_, err := c.call(ctx, "initialize", map[string]any{
 		"protocolVersion": protocolVersion,
 		"capabilities":    map[string]any{},
-		"clientInfo":      map[string]any{"name": "lolstats", "version": "0.1.0"},
+		"clientInfo":      map[string]any{"name": "draftsmith", "version": "0.1.0"},
 	})
 	if err != nil {
 		return fmt.Errorf("opgg initialize: %w", err)

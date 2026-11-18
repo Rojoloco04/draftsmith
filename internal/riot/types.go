@@ -1,6 +1,6 @@
 package riot
 
-// Only the fields lolstats reads are declared. The raw JSON is archived in
+// Only the fields draftsmith reads are declared. The raw JSON is archived in
 // full, so adding a field later just means adding it here.
 
 type Match struct {

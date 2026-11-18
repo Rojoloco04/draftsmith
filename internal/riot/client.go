@@ -1,5 +1,5 @@
 // Package riot is a small client for the parts of the Riot Games API that
-// lolstats needs: account-v1, match-v5 and league-v4.
+// draftsmith needs: account-v1, match-v5 and league-v4.
 package riot
 
 import (

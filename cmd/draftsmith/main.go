@@ -1,4 +1,4 @@
-// Command lolstats archives your ranked League of Legends games from the
+// Command draftsmith archives your ranked League of Legends games from the
 // Riot API and turns them into a report.
 package main
 
@@ -18,33 +18,33 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Rojoloco04/lolstats/internal/analysis"
-	"github.com/Rojoloco04/lolstats/internal/ingest"
-	"github.com/Rojoloco04/lolstats/internal/opgg"
-	"github.com/Rojoloco04/lolstats/internal/riot"
-	"github.com/Rojoloco04/lolstats/internal/store"
+	"github.com/rojoloco04/draftsmith/internal/analysis"
+	"github.com/rojoloco04/draftsmith/internal/ingest"
+	"github.com/rojoloco04/draftsmith/internal/opgg"
+	"github.com/rojoloco04/draftsmith/internal/riot"
+	"github.com/rojoloco04/draftsmith/internal/store"
 )
 
 const version = "0.1.0"
 
-const usage = `lolstats: ranked League of Legends stats from your own match archive
+const usage = `draftsmith: ranked League of Legends stats from your own match archive
 
 Usage:
-  lolstats sync    [flags]          archive ranked games (and today's rank) from the Riot API
-  lolstats report  [flags]          print a markdown report from the archive
-  lolstats export  [flags]          dump per-game features as JSON lines
-  lolstats meta tools [--schema]    list OP.GG's meta tools
-  lolstats meta call <tool> [json]  call an OP.GG tool and cache the result
-  lolstats version
+  draftsmith sync    [flags]          archive ranked games (and today's rank) from the Riot API
+  draftsmith report  [flags]          print a markdown report from the archive
+  draftsmith export  [flags]          dump per-game features as JSON lines
+  draftsmith meta tools [--schema]    list OP.GG's meta tools
+  draftsmith meta call <tool> [json]  call an OP.GG tool and cache the result
+  draftsmith version
 
 Config comes from flags, environment variables, or a .env file in the
 current directory:
   RIOT_API_KEY        your Riot key (required for sync)
-  LOLSTATS_RIOT_ID    Name#TAG
-  LOLSTATS_PLATFORM   na1, euw1, kr, ... (default na1)
-  LOLSTATS_DATA       archive directory (default ./data)
+  DRAFTSMITH_RIOT_ID    Name#TAG
+  DRAFTSMITH_PLATFORM   na1, euw1, kr, ... (default na1)
+  DRAFTSMITH_DATA       archive directory (default ./data)
 
-Run "lolstats <command> -h" for command flags.
+Run "draftsmith <command> -h" for command flags.
 `
 
 func main() {
@@ -67,7 +67,7 @@ func main() {
 	case "meta":
 		err = cmdMeta(ctx, os.Args[2:])
 	case "version":
-		fmt.Println("lolstats", version)
+		fmt.Println("draftsmith", version)
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 	default:
@@ -88,9 +88,9 @@ type common struct {
 }
 
 func (c *common) register(fs *flag.FlagSet) {
-	fs.StringVar(&c.data, "data", env("LOLSTATS_DATA", "data"), "archive directory")
-	fs.StringVar(&c.platform, "platform", env("LOLSTATS_PLATFORM", "na1"), "platform: na1, euw1, kr, ...")
-	fs.StringVar(&c.riotID, "riot-id", env("LOLSTATS_RIOT_ID", ""), "Riot ID as Name#TAG")
+	fs.StringVar(&c.data, "data", env("DRAFTSMITH_DATA", "data"), "archive directory")
+	fs.StringVar(&c.platform, "platform", env("DRAFTSMITH_PLATFORM", "na1"), "platform: na1, euw1, kr, ...")
+	fs.StringVar(&c.riotID, "riot-id", env("DRAFTSMITH_RIOT_ID", ""), "Riot ID as Name#TAG")
 	fs.StringVar(&c.queues, "queues", "solo", "ranked queues: solo, flex, or both")
 }
 
@@ -131,7 +131,7 @@ func cmdSync(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if base := os.Getenv("LOLSTATS_RIOT_BASE_URL"); base != "" { // for tests
+	if base := os.Getenv("DRAFTSMITH_RIOT_BASE_URL"); base != "" { // for tests
 		client.BaseURL = func(string) string { return base }
 	}
 	s, err := store.Open(c.data)
@@ -145,7 +145,7 @@ func cmdSync(ctx context.Context, args []string) error {
 
 	if c.riotID != "" && !strings.EqualFold(c.riotID, st.RiotID) || st.PUUID == "" {
 		if c.riotID == "" {
-			return errors.New("first sync needs --riot-id Name#TAG (or LOLSTATS_RIOT_ID)")
+			return errors.New("first sync needs --riot-id Name#TAG (or DRAFTSMITH_RIOT_ID)")
 		}
 		name, tag, ok := strings.Cut(c.riotID, "#")
 		if !ok {
@@ -203,7 +203,7 @@ func loadForAnalysis(c common) (*store.Store, store.State, []analysis.Game, erro
 		return nil, st, nil, err
 	}
 	if st.PUUID == "" {
-		return nil, st, nil, errors.New("no archive yet; run `lolstats sync --riot-id Name#TAG` first")
+		return nil, st, nil, errors.New("no archive yet; run `draftsmith sync --riot-id Name#TAG` first")
 	}
 	queues, err := c.queueList()
 	if err != nil {
@@ -282,7 +282,7 @@ func cmdExport(args []string) error {
 
 func cmdMeta(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: lolstats meta tools [--schema] | lolstats meta call <tool> [json-args]")
+		return errors.New("usage: draftsmith meta tools [--schema] | draftsmith meta call <tool> [json-args]")
 	}
 	switch args[0] {
 	case "tools":
@@ -309,12 +309,12 @@ func cmdMeta(ctx context.Context, args []string) error {
 
 	case "call":
 		fs := flag.NewFlagSet("meta call", flag.ExitOnError)
-		data := fs.String("data", env("LOLSTATS_DATA", "data"), "archive directory (results are cached under meta/)")
+		data := fs.String("data", env("DRAFTSMITH_DATA", "data"), "archive directory (results are cached under meta/)")
 		endpoint := fs.String("endpoint", opgg.DefaultEndpoint, "MCP endpoint")
 		fs.Parse(args[1:])
 		rest := fs.Args()
 		if len(rest) == 0 {
-			return errors.New("usage: lolstats meta call <tool> [json-args]")
+			return errors.New("usage: draftsmith meta call <tool> [json-args]")
 		}
 		tool := rest[0]
 		argJSON := "{}"

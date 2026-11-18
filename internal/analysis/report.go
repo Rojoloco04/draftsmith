@@ -114,7 +114,7 @@ func WriteReport(w io.Writer, in ReportInput) {
 	p("# Ranked report: %s", in.RiotID)
 	p("")
 	if len(games) == 0 {
-		p("No ranked games archived yet. Run `lolstats sync` first.")
+		p("No ranked games archived yet. Run `draftsmith sync` first.")
 		return
 	}
 	var all agg

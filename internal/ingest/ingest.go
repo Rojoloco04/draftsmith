@@ -8,8 +8,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/Rojoloco04/lolstats/internal/riot"
-	"github.com/Rojoloco04/lolstats/internal/store"
+	"github.com/rojoloco04/draftsmith/internal/riot"
+	"github.com/rojoloco04/draftsmith/internal/store"
 )
 
 type Options struct {

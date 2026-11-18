@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Rojoloco04/lolstats/internal/fixture"
+	"github.com/rojoloco04/draftsmith/internal/fixture"
 )
 
 // TestSyncReportExport runs the CLI commands end to end against a fake Riot.
@@ -55,7 +55,7 @@ func TestSyncReportExport(t *testing.T) {
 
 	dir := t.TempDir()
 	t.Setenv("RIOT_API_KEY", "RGAPI-test")
-	t.Setenv("LOLSTATS_RIOT_BASE_URL", srv.URL)
+	t.Setenv("DRAFTSMITH_RIOT_BASE_URL", srv.URL)
 	data := filepath.Join(dir, "data")
 
 	if err := cmdSync(context.Background(), []string{"--data", data, "--riot-id", "Jack#NA1", "--rate", "1000/1s"}); err != nil {

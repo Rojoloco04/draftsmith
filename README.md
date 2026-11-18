@@ -1,4 +1,4 @@
-# lolstats
+# Draftsmith
 
 Personal ranked League of Legends stats from your own match archive. It pulls your ranked games from the Riot API, keeps the raw JSON locally so nothing is lost when Riot ages it out, and builds a report on your roles, champion pool, laning, early deaths, and how you convert leads.
 
@@ -11,16 +11,16 @@ Standard library only, no dependencies.
 3. Build:
 
 ```sh
-go build -o lolstats ./cmd/lolstats     # lolstats.exe on Windows
+go build -o draftsmith ./cmd/draftsmith     # draftsmith.exe on Windows
 ```
 
 ## Usage
 
 ```sh
-lolstats sync --riot-id "Name#TAG"      # first run; later runs just `lolstats sync`
-lolstats report                          # markdown report to stdout
-lolstats report --out report.md
-lolstats export --out games.jsonl        # per-game features, one JSON object per line
+draftsmith sync --riot-id "Name#TAG"      # first run; later runs just `draftsmith sync`
+draftsmith report                          # markdown report to stdout
+draftsmith report --out report.md
+draftsmith export --out games.jsonl        # per-game features, one JSON object per line
 ```
 
 `sync` is incremental and safe to interrupt. The first run pages through every ranked game Riot still has, which on a personal key is roughly 1.2 seconds per API call (one call per match, one per timeline). Ctrl-C stops it cleanly and the next run picks up where it left off. Each run also snapshots your current rank, since Riot only exposes the current split's standing.
@@ -38,11 +38,11 @@ Riot keeps matches for about two years and timelines for about one, on a rolling
 
 ### Meta data from OP.GG
 
-OP.GG runs a public MCP server with champion tiers, win/pick/ban rates, counters, and builds. `lolstats` talks to it directly over HTTP, no AI client needed.
+OP.GG runs a public MCP server with champion tiers, win/pick/ban rates, counters, and builds. `draftsmith` talks to it directly over HTTP, no AI client needed.
 
 ```sh
-lolstats meta tools --schema             # see what's available and each tool's arguments
-lolstats meta call lol_list_lane_meta_champions '{...args from the schema...}'
+draftsmith meta tools --schema             # see what's available and each tool's arguments
+draftsmith meta call lol_list_lane_meta_champions '{...args from the schema...}'
 ```
 
 Results are cached under `data/meta/`. The tool arguments aren't documented in OP.GG's README, so start with `meta tools --schema` to see them.
@@ -62,7 +62,7 @@ Everything compares you to yourself right now.
 ## Layout
 
 ```
-cmd/lolstats        CLI
+cmd/draftsmith        CLI
 internal/riot       Riot API client: multi-window rate limiter, 429 retry, account/match/league endpoints
 internal/store      gzipped raw JSON archive under data/
 internal/ingest     incremental sync with resumable backfill

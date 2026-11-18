@@ -7,8 +7,8 @@ import (
 	"os"
 	"sort"
 
-	"github.com/Rojoloco04/lolstats/internal/riot"
-	"github.com/Rojoloco04/lolstats/internal/store"
+	"github.com/rojoloco04/draftsmith/internal/riot"
+	"github.com/rojoloco04/draftsmith/internal/store"
 )
 
 // LoadGames parses every archived match for puuid, oldest first.

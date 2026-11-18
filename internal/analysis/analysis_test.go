@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Rojoloco04/lolstats/internal/fixture"
+	"github.com/rojoloco04/draftsmith/internal/fixture"
 )
 
 func TestExtractLaneDiffsAndDeaths(t *testing.T) {

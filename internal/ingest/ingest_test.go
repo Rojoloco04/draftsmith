@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Rojoloco04/lolstats/internal/fixture"
-	"github.com/Rojoloco04/lolstats/internal/riot"
-	"github.com/Rojoloco04/lolstats/internal/store"
+	"github.com/rojoloco04/draftsmith/internal/fixture"
+	"github.com/rojoloco04/draftsmith/internal/riot"
+	"github.com/rojoloco04/draftsmith/internal/store"
 )
 
 // fakeRiot serves n solo queue games, newest first. Games older than

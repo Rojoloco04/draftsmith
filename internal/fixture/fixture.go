@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/Rojoloco04/lolstats/internal/riot"
+	"github.com/rojoloco04/draftsmith/internal/riot"
 )
 
 const MePUUID = "me-puuid"
