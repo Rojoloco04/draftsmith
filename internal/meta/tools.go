@@ -101,6 +101,10 @@ type TierEntry struct {
 	Win      int
 	PickRate float64
 	BanRate  float64
+	// RoleRate is the share of the champion's games played in this
+	// position (OP.GG's role_rate, 2 decimals). 0 in tier lists cached
+	// before it was requested.
+	RoleRate float64
 	Tier     int // 1 (OP) to 5 (weak)
 	Rank     int // OP.GG's rank within the position
 }
@@ -157,6 +161,7 @@ func (s *Service) TierList(ctx context.Context) (TierList, error) {
 		Win      int     `json:"win"`
 		PickRate float64 `json:"pick_rate"`
 		BanRate  float64 `json:"ban_rate"`
+		RoleRate float64 `json:"role_rate"`
 		Tier     int     `json:"tier"`
 		Rank     int     `json:"rank"`
 	}
@@ -166,7 +171,7 @@ func (s *Service) TierList(ctx context.Context) (TierList, error) {
 		tool: "lol_list_lane_meta_champions",
 		args: map[string]any{
 			"position":              "all",
-			"desired_output_fields": []string{"data.positions.{" + strings.Join(Positions, ",") + "}[].{champion,play,win,pick_rate,ban_rate,tier,rank}"},
+			"desired_output_fields": []string{"data.positions.{" + strings.Join(Positions, ",") + "}[].{champion,play,win,pick_rate,role_rate,ban_rate,tier,rank}"},
 		},
 		maxAge: TierListMaxAge,
 		decode: func(body string) (string, error) {
@@ -200,7 +205,7 @@ func (s *Service) TierList(ctx context.Context) (TierList, error) {
 		for _, r := range rows[p] {
 			out.Entries = append(out.Entries, TierEntry{
 				Name: r.Champion, Key: champs.KeyFor(r.Champion), Position: p,
-				Play: r.Play, Win: r.Win, PickRate: r.PickRate, BanRate: r.BanRate, Tier: r.Tier, Rank: r.Rank,
+				Play: r.Play, Win: r.Win, PickRate: r.PickRate, BanRate: r.BanRate, RoleRate: r.RoleRate, Tier: r.Tier, Rank: r.Rank,
 			})
 		}
 	}
