@@ -1,8 +1,8 @@
 # Draftsmith
 
-Personal ranked League of Legends stats from your own match archive. It pulls your ranked games from the Riot API, keeps the raw JSON locally so nothing is lost when Riot ages it out, and builds a report on your roles, champion pool, laning, early deaths, and how you convert leads.
+Personal ranked League of Legends stats from your own match archive. It pulls your ranked games from the Riot API, keeps the raw JSON locally so nothing is lost when Riot ages it out, and builds a report and a local dashboard on your roles, champion pool, laning, early deaths, and how you convert leads.
 
-Standard library only, no dependencies.
+One dependency: `modernc.org/sqlite` (pure Go, no cgo) for the dashboard's index.
 
 ## Setup
 
@@ -31,6 +31,21 @@ Flags worth knowing:
 - `--no-timelines` halves the API calls but drops lane diffs and death data
 - `--max N` caps how many new games one run fetches
 - `--platform euw1` etc. if you're not on NA
+
+### Dashboard
+
+```sh
+draftsmith serve                           # http://127.0.0.1:8080, syncs every 25 minutes
+draftsmith serve --addr 100.x.y.z:8080     # bind your Tailscale IP to open it from your phone
+draftsmith serve --no-sync                 # just browse the archive
+draftsmith reindex                         # rebuild data/draftsmith.db from the archive
+```
+
+Pages: an overview (rank and LP history, rolling win rate, top champions, roles, gold lead at 15 vs result, notes), match history with role and champion filters, a match page (both teams' stats, your gold and CS against your lane opponent, where you died), and per-champion stats with matchups.
+
+The dashboard has no login, so it only listens where you tell it to and refuses `0.0.0.0`. Keep it on localhost or Tailscale; don't port forward it. Other players appear as champion and position only. Champion and item icons load from Riot's Data Dragon CDN.
+
+`data/draftsmith.db` is a SQLite index built from the raw archive. `sync` and `serve` keep it current, and it's safe to delete: `reindex` (or the next `serve`) rebuilds it.
 
 ### Why sync early and often
 
@@ -66,16 +81,19 @@ cmd/draftsmith        CLI
 internal/riot       Riot API client: multi-window rate limiter, 429 retry, account/match/league endpoints
 internal/store      gzipped raw JSON archive under data/
 internal/ingest     incremental sync with resumable backfill
-internal/analysis   per-game features and the report
+internal/analysis   per-game features, the shared summary, and the markdown report
+internal/db         SQLite index over the archive for the dashboard
+internal/web        dashboard handlers, templates, SVG charts, static files (embedded)
 internal/opgg       MCP client for OP.GG meta data
-internal/fixture    synthetic match/timeline JSON for tests
+internal/fixture    synthetic match/timeline JSON (and one scrubbed real game) for tests
 ```
 
 ## Roadmap
 
 - `sample`: crawl games from players in your tier to build real benchmarks (CS diff, vision, early deaths) for your role and elo, so the report can say "below your bracket" instead of only "below your own average"
-- Join OP.GG meta into the champion pool section (your adjusted win rate vs the champion's tier this patch)
-- Death position heatmap
+- Join OP.GG meta into the champion pool section (your adjusted win rate vs the champion's tier this patch), plus a tier list page
+- Champ select helper (`watch`) feeding the dashboard live
+- Death position heatmap across games
 - LLM writeup over `export` output
 - Quartermaster integration: post-game report in Discord
 

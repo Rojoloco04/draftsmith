@@ -11,12 +11,18 @@ Done (commits `09ccc8e`, `b544eaf`, and Phase 0 in `1de8202` on branch `phase0-v
 - `internal/ingest`: incremental sync. Pages the full match id list until a backfill completes (and every listed game is stored), then stops at the first fully archived page. Timelines Riot no longer has get a `.missing` marker.
 - `internal/analysis`: per-game features (CS/gold/vision per min, KP, damage share, gold/CS/XP diff vs lane opponent at 10 and 15, deaths before 15, deaths on the enemy half, death positions) and a markdown report.
 - `internal/opgg`: MCP client (Streamable HTTP, JSON or SSE responses, session header) for OP.GG's public server at `https://mcp-api.op.gg/mcp`.
-- CLI: `sync`, `report`, `export`, `meta tools`, `meta call`, `version`.
+- CLI: `sync`, `report`, `export`, `meta tools`, `meta call`, `version` (Phase 1 added `serve` and `reindex`).
 - Tests use synthetic fixtures (`internal/fixture`), one scrubbed real game, and httptest fakes. Verified against the real Riot API and OP.GG in Phase 0.
 
-Why stdlib only so far: the sandbox it was written in couldn't reach the Go module proxy. That constraint is gone on this machine, so dependencies are fine where they earn their place.
+Phase 1 (branch `phase1-dashboard`, commits `40330bf`, `c274e5c`, `410621f`; see the Phase 1 section):
 
-**Next up: Phase 1, on branch `phase1-dashboard`** (branched from `phase0-verify`, no commits yet; neither branch is merged to `main`).
+- `internal/db`: SQLite index (`modernc.org/sqlite`, the first dependency) over the archive.
+- `analysis.Summarize`: one computation shared by `report` and the dashboard.
+- `internal/web` + `draftsmith serve`: the dashboard, with background sync. `draftsmith reindex` rebuilds the index.
+
+The early code was stdlib only because the sandbox it was written in couldn't reach the Go module proxy. That constraint is gone; dependencies are fine where they earn their place.
+
+**Next up:** merge `phase0-verify` and `phase1-dashboard` into `main` (neither is merged yet; `phase1-dashboard` contains `phase0-verify`), then Phase 2 on a new branch, starting with the OP.GG class-notation parser.
 
 Dev environment notes:
 
@@ -34,14 +40,31 @@ Dev environment notes:
 - Still to eyeball by hand: the report's numbers against OP.GG's site for a couple of games.
 - Windows note: PowerShell mangles JSON arguments to `meta call`. Use Git Bash, or read args from a file if this becomes annoying.
 
-## Phase 1: dashboard (`draftsmith serve`)
+## Phase 1: dashboard (`draftsmith serve`) (done 2026-11-17)
 
 Goal: an OP.GG-style site for me, served by the Go binary, reachable over Tailscale only.
+
+What shipped, and where it differs from the plan below:
+
+- Build order steps 1 to 5 are done. Overview, match history (htmx filters and paging), match detail, champions and per-champion pages work against the real archive; tier list and champ select are stub pages.
+- **Charts are inline SVG rendered in Go** (`internal/web/chart.go`), not a vendored JS library. No script to load, tooltips via SVG `<title>`, and handler tests can assert on them. Revisit only if a chart needs real interactivity.
+- **Icons come from Riot's Data Dragon CDN** (`ddragon.leagueoflegends.com/cdn/<patch>.1/...`), using each game's own patch. The URLs carry only champion and item ids. The CSP allows images from that host only; if an icon fails to load, the champion's initials show instead. `FiddleSticks` is the one archived name that differs from its Data Dragon id.
+- Schema version lives in `PRAGMA user_version` (`db.SchemaVersion`). Bump it whenever stored columns or derived values change; `Open` drops every table and the next `Index` rebuilds them. The index also stores the tracked PUUID and clears itself if that changes, and reindexes a game whose timeline is archived after the match.
+- `sync` updates the index too, so the CLI and `serve` never disagree. `serve` refuses `0.0.0.0`, `::` and a bare `:port`.
+- Win rates are only colored green or red at 5+ games; below that the number is shown uncolored next to the game count.
+- `analysis.Summarize` sorts ties by name, so report rows that tie on adjusted win rate are now in a stable order (they used to follow map order). Otherwise the report output is unchanged; checked by diffing old and new output on the real archive and on synthetic games.
+- Verified by hand against the real archive: every page renders, real background sync runs, and match detail numbers match `analysis.TestExtractRealGame`.
+
+Follow-ups, none blocking:
+
+- Death heatmap across games (the per-game map exists; the `deaths` table is ready for an aggregate view).
+- Rate limit priority still waits for Phase 4 (step 6 below).
+- Still to eyeball by hand: the report's numbers against OP.GG's site for a couple of games (carried over from Phase 0).
 
 Decided:
 
 - **Storage: SQLite via `modernc.org/sqlite`** (pure Go, no cgo). The gzipped raw JSON under `data/matches` and `data/timelines` stays the source of truth; SQLite is a derived index that can always be rebuilt from it (`draftsmith reindex`, and automatically when the schema version changes). DB file at `data/draftsmith.db`.
-- Server-rendered `html/template` + `embed`, htmx for interactivity, a small chart library vendored into `web/static` (no CDN). No SPA build step.
+- Server-rendered `html/template` + `embed`, htmx for interactivity (vendored, no CDN). No SPA build step. (Charts ended up as Go-rendered SVG; see above.)
 - Bind to `127.0.0.1` by default, `--addr` to bind the Tailscale IP. No auth beyond that, so never bind `0.0.0.0` and never port forward.
 
 Build order:
