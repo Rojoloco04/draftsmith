@@ -22,6 +22,7 @@ import (
 	"github.com/rojoloco04/draftsmith/internal/analysis"
 	"github.com/rojoloco04/draftsmith/internal/db"
 	"github.com/rojoloco04/draftsmith/internal/ingest"
+	"github.com/rojoloco04/draftsmith/internal/meta"
 	"github.com/rojoloco04/draftsmith/internal/opgg"
 	"github.com/rojoloco04/draftsmith/internal/riot"
 	"github.com/rojoloco04/draftsmith/internal/store"
@@ -342,13 +343,45 @@ func cmdReport(args []string) error {
 		}
 	}
 
+	sum := analysis.Summarize(games, in.MinGames)
+	pm, err := poolMeta(c.data, sum)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "warning: skipping pool vs meta:", err)
+	}
+	in.PoolMeta = pm
+
 	w, closeFn, err := output(*out)
 	if err != nil {
 		return err
 	}
 	defer closeFn()
-	analysis.WriteReport(w, in)
+	analysis.RenderMarkdown(w, in, sum)
 	return nil
+}
+
+// poolMeta renders the report's pool vs meta section from the OP.GG cache
+// that serve fills. It never calls OP.GG, and returns "" if nothing is
+// cached (or there's no index yet; it won't create one).
+func poolMeta(data string, sum analysis.Summary) (string, error) {
+	path := filepath.Join(data, db.FileName)
+	if _, err := os.Stat(path); err != nil {
+		return "", nil
+	}
+	ctx := context.Background()
+	d, err := db.Open(ctx, path)
+	if err != nil {
+		return "", err
+	}
+	defer d.Close()
+	tl, err := meta.NewCacheOnly(d).TierList(ctx)
+	if errors.Is(err, meta.ErrNotCached) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	fits := meta.PoolFit(sum.Games, sum.Base, tl, meta.PoolMinGames)
+	return meta.PoolMarkdown(fits, tl, sum.Base, time.Now()), nil
 }
 
 func cmdExport(args []string) error {

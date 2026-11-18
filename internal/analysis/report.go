@@ -12,6 +12,9 @@ type ReportInput struct {
 	Games    []Game
 	// MinGames hides champions and matchups with fewer games.
 	MinGames int
+	// PoolMeta is an optional markdown section placed after the champion
+	// pool. The meta package renders it (analysis can't import meta).
+	PoolMeta string
 }
 
 // WriteReport renders a markdown report.
@@ -70,6 +73,11 @@ func RenderMarkdown(w io.Writer, in ReportInput, s Summary) {
 			Signed(c.GoldDiff15(), 0), c.Read)
 	}
 	p("")
+
+	if in.PoolMeta != "" {
+		fmt.Fprint(w, in.PoolMeta)
+		p("")
+	}
 
 	p("## Early game vs result")
 	p("")

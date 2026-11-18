@@ -70,6 +70,7 @@ draftsmith meta call lol_list_lane_meta_champions '{...args from the schema...}'
 - Win rate, KDA, CS/min, and vision by season (calendar year) and by role
 - Kill participation, damage share, control wards, CS diff at 10, gold diff at 15, and deaths before 15 by role
 - Champion pool with an adjusted win rate: each champion's record is blended with 10 games at your overall win rate, so a 7-2 champion doesn't look like your best pick
+- Your pool vs the meta: each champion with 3+ games next to its OP.GG tier in the role you play it most. The report reads only the OP.GG cache that `serve` fills and never calls OP.GG itself; the section is left out until something is cached
 - Win rate bucketed by gold lead at 15 (shows whether you lose lanes or throw leads)
 - Toughest lane matchups in your main role
 - Last 20 games vs everything before
@@ -95,7 +96,6 @@ internal/fixture    synthetic match/timeline JSON (and one scrubbed real game) f
 ## Roadmap
 
 - `sample`: crawl games from players in your tier to build real benchmarks (CS diff, vision, early deaths) for your role and elo, so the report can say "below your bracket" instead of only "below your own average"
-- Pool vs meta notes in the markdown report, not just the dashboard
 - Champ select helper (`watch`) feeding the dashboard live
 - Death position heatmap across games
 - LLM writeup over `export` output

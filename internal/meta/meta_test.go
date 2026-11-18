@@ -188,6 +188,79 @@ func TestNoCacheNoNetwork(t *testing.T) {
 	}
 }
 
+func TestCacheOnly(t *testing.T) {
+	ctx := context.Background()
+	co := NewCacheOnly(memCache{})
+	if _, err := co.TierList(ctx); !errors.Is(err, ErrNotCached) {
+		t.Fatalf("empty cache: err %v, want ErrNotCached", err)
+	}
+
+	// Whatever is cached is served, however old, with no network call (the
+	// cache-only service has no client to call).
+	s, _, cache, _ := newTest(t)
+	want, err := s.TierList(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, e := range cache {
+		e.FetchedAt = e.FetchedAt.Add(-90 * 24 * time.Hour)
+		cache[k] = e
+	}
+	tl, err := NewCacheOnly(cache).TierList(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tl.Stale() || tl.ChampionsErr != nil || len(tl.Entries) != len(want.Entries) || !tl.FetchedAt.Equal(want.FetchedAt.Add(-90*24*time.Hour)) {
+		t.Errorf("stale=%v champsErr=%v, %d entries, fetched %v", tl.Stale(), tl.ChampionsErr, len(tl.Entries), tl.FetchedAt)
+	}
+	if e, _ := tl.Find("MonkeyKing", "top"); e.Name != "Wukong" {
+		t.Errorf("champion table not used from the cache: %+v", e)
+	}
+
+	// Without the champion table, keys are guessed but the tier list still works.
+	delete(cache, "champions")
+	tl, err = NewCacheOnly(cache).TierList(ctx)
+	if err != nil || !errors.Is(tl.ChampionsErr, ErrNotCached) {
+		t.Errorf("err %v, champsErr %v", err, tl.ChampionsErr)
+	}
+}
+
+func TestPoolMarkdown(t *testing.T) {
+	fetched := time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
+	tl := TierList{Freshness: Freshness{FetchedAt: fetched}, Entries: []TierEntry{{Key: "Ahri", Position: "mid", Tier: 1}}}
+	var games []analysis.Game
+	for i := 0; i < 10; i++ {
+		games = append(games, analysis.Game{Champion: "Ahri", Role: "MIDDLE", Win: i < 8})
+	}
+	for i := 0; i < 4; i++ {
+		games = append(games, analysis.Game{Champion: "Zed", Role: "MIDDLE", Win: i < 1})
+	}
+	games = append(games, analysis.Game{Champion: "Lux", Role: "MIDDLE"})
+	fits := PoolFit(games, 0.5, tl, 1)
+
+	md := PoolMarkdown(fits, tl, 0.5, fetched.Add(time.Hour))
+	for _, want := range []string{
+		"## Your pool vs the meta",
+		"as of Nov 17 2026. Champions with 3+ games",
+		"overall 50%",
+		"| Ahri | Mid | 10 | 65% | 1 | Strong for you and strong in the meta (tier 1 Mid). Keep playing it. |",
+		"| Zed | Mid | 4 | 43% | unlisted | Not working for you, and OP.GG doesn't list it Mid.",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("missing %q\n%s", want, md)
+		}
+	}
+	if strings.Contains(md, "Lux") || strings.Contains(md, "refreshes it") {
+		t.Errorf("Lux has too few games, and a fresh list needs no age warning:\n%s", md)
+	}
+	if md := PoolMarkdown(fits, tl, 0.5, fetched.Add(3*24*time.Hour)); !strings.Contains(md, "(cached; `draftsmith serve` refreshes it)") {
+		t.Errorf("old tier list not flagged:\n%s", md)
+	}
+	if md := PoolMarkdown(nil, tl, 0.5, fetched); md != "" {
+		t.Errorf("no champions should render nothing, got %q", md)
+	}
+}
+
 func TestSchemaChangeIsNotCached(t *testing.T) {
 	ctx := context.Background()
 	s, f, cache, clk := newTest(t)

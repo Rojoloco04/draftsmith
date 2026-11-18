@@ -73,6 +73,43 @@ func TestSyncReportExport(t *testing.T) {
 			t.Errorf("report missing %q\n%s", want, out)
 		}
 	}
+	if strings.Contains(out, "pool vs the meta") {
+		t.Errorf("no tier list is cached, so the report shouldn't compare with the meta:\n%s", out)
+	}
+
+	// With a tier list in the cache (however old), the report uses it
+	// without calling OP.GG.
+	tierList, err := os.ReadFile("../../internal/opgg/testdata/tierlist_all.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := db.OpenDir(context.Background(), data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = d.PutMetaEntry(context.Background(), db.MetaEntry{Key: "tierlist", FetchedAt: time.Now().Add(-30 * 24 * time.Hour), Body: string(tierList)})
+	d.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdReport([]string{"--data", data, "--out", report}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ = os.ReadFile(report)
+	out = string(b)
+	for _, want := range []string{
+		"## Your pool vs the meta",
+		"(cached; `draftsmith serve` refreshes it)",
+		"| Ahri | Mid | 15 | 87% | 1 | Strong for you and strong in the meta (tier 1 Mid).",
+		"| Viktor | Mid | 15 | 27% | 3 | Losing for you; middle of the meta (tier 3 Mid).",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("report missing %q\n%s", want, out)
+		}
+	}
+	if i, j := strings.Index(out, "## Champion pool"), strings.Index(out, "## Your pool vs the meta"); i < 0 || j < i {
+		t.Errorf("pool vs meta should follow the champion pool")
+	}
 
 	export := filepath.Join(dir, "games.jsonl")
 	if err := cmdExport([]string{"--data", data, "--out", export}); err != nil {
@@ -84,7 +121,7 @@ func TestSyncReportExport(t *testing.T) {
 	}
 
 	// Sync also built the dashboard index.
-	d, err := db.OpenDir(context.Background(), data)
+	d, err = db.OpenDir(context.Background(), data)
 	if err != nil {
 		t.Fatal(err)
 	}

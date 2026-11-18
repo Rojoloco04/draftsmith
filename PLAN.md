@@ -26,10 +26,9 @@ Phases 0 and 1 were merged into `main` on 2026-11-17 and pushed to the public re
 
 Phase 2 (branch `phase2-meta`, commits `f40577c`, `8c782f3`, `c40be78`; see the Phase 2 section): the OP.GG class-notation parser (`opgg.Parse`/`opgg.Decode`), `internal/meta` (typed, cached tier list, champion table and champion analysis), and the dashboard's tier list page, pool-vs-meta card and per-champion OP.GG card. Merged into `main` (fast-forward) and pushed on 2026-11-17.
 
-**Next up:**
+The Phase 2 leftover (pool vs meta in the markdown `report`) is done on `main`: `meta.NewCacheOnly` serves whatever is cached however old and never dials OP.GG (it has no client, so a stray call would panic rather than hit the network), and `report` renders `meta.PoolMarkdown` after the champion pool, leaving the section out when no tier list is cached or there's no index yet (it won't create one).
 
-1. The small leftover from Phase 2: pool vs meta notes in the markdown `report`, reading only the `meta_cache` table (no network calls from `report`) and skipping the section when nothing is cached. `meta.PoolFit` already does the work; `report` needs a cache-only path (for example a `meta.Service` whose dial always fails, which serves whatever is cached however old, or a small cache-only reader in `internal/meta`).
-2. Phase 3 (`draftsmith watch`) on a new branch off `main`. Read the Phase 3 section and its compliance rules first. The first step is LCU discovery (lockfile, then process args) and polling `gameflow-phase`, verified against the real client. That needs League installed and running on this PC, so check with the user before relying on it.
+**Next up:** Phase 3 (`draftsmith watch`) on a new branch off `main`. Read the Phase 3 section and its compliance rules first. The first step is LCU discovery (lockfile, then process args) and polling `gameflow-phase`, verified against the real client. That needs League installed and running on this PC, so check with the user before relying on it.
 
 Handoff notes (things a new session would otherwise rediscover):
 
@@ -125,10 +124,10 @@ Decided:
 - "Working for you" and "losing for you" in the pool card use the report's threshold: adjusted win rate 3+ points above or below my overall. Meta strong is tier 1-2, weak is tier 4-5. The notes need 3+ games; the Meta column shows every champion.
 - In both counter lists, `win` is the analyzed champion's wins (checked against `my_win_rate`), so `Counter.WinRate()` is always "my champion into them".
 - The champion table's `Jade_*` mode variants (ids 60001+) are skipped.
+- Pool vs meta in the markdown `report` (after Phase 2 merged): reads only `meta_cache` through `meta.NewCacheOnly`, flags a tier list older than a day, and is skipped when nothing is cached. Same 3+ game rule and thresholds as the dashboard card.
 
 Left:
 
-- Pool vs meta in the markdown `report`. It should read only the cache (no network from `report`) and skip the section when nothing is cached.
 - Rune names and icons: `Analysis.Runes` already has the ids an LCU page needs; display needs Data Dragon's `runesReforged.json`. Do it with Phase 3's rune import.
 - `lol_get_lane_matchup_guide` isn't wrapped yet; Phase 3's matchup view is the first real use.
 - The `data/meta/*.json` files from `meta call` are only probes now; nothing reads them.

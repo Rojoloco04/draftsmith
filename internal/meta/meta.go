@@ -85,6 +85,9 @@ type Service struct {
 	cache Cache
 	dial  func() Caller
 	now   func() time.Time
+	// cacheOnly serves whatever is cached, however old, and never calls
+	// OP.GG.
+	cacheOnly bool
 
 	mu     sync.Mutex
 	failed map[string]time.Time // key -> last failed refresh
@@ -101,6 +104,16 @@ func New(cache Cache, endpoint string) *Service {
 func NewWith(cache Cache, dial func() Caller, now func() time.Time) *Service {
 	return &Service{cache: cache, dial: dial, now: now, failed: map[string]time.Time{}}
 }
+
+// NewCacheOnly returns a service that never calls OP.GG: it serves whatever
+// is cached, however old, and returns ErrNotCached for anything else. The
+// report uses it so that it never touches the network for meta data.
+func NewCacheOnly(cache Cache) *Service {
+	return &Service{cache: cache, now: time.Now, cacheOnly: true, failed: map[string]time.Time{}}
+}
+
+// ErrNotCached is returned by a cache-only service for data it doesn't have.
+var ErrNotCached = errors.New("not in the OP.GG cache")
 
 // Freshness says how old served data is.
 type Freshness struct {
@@ -135,8 +148,11 @@ func (s *Service) get(ctx context.Context, req request) (Freshness, error) {
 	if err != nil {
 		return Freshness{}, err
 	}
-	if have && s.now().Sub(cached.FetchedAt) < req.maxAge {
+	if have && (s.cacheOnly || s.now().Sub(cached.FetchedAt) < req.maxAge) {
 		return Freshness{FetchedAt: cached.FetchedAt, Patch: cached.Patch}, nil
+	}
+	if s.cacheOnly {
+		return Freshness{}, ErrNotCached
 	}
 
 	s.mu.Lock()
