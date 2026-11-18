@@ -53,7 +53,7 @@ func TestRefreshButton(t *testing.T) {
 	srv.SetRefresh(func() bool { calls++; return true })
 
 	_, body := get(t, ts, "/matches")
-	expect(t, body, `<button type="button" class="btn" hx-post="/sync"`, "Refresh</button>")
+	expect(t, body, `<button type="button" class="btn" hx-post="/sync"`, "Refresh</span></button>")
 
 	// Not from htmx (a cross-site form, say): refused, nothing started.
 	if code, _, _ := post(t, ts, "/sync"); code != http.StatusForbidden || calls != 0 {
@@ -90,7 +90,7 @@ func TestRefreshButton(t *testing.T) {
 	if hdr.Get("HX-Refresh") != "true" {
 		t.Errorf("finished sync should reload the page, headers %v", hdr)
 	}
-	expect(t, body, "Refresh</button>")
+	expect(t, body, "Refresh</span></button>")
 	if _, hdr = getHeader(t, ts, "/sync"); hdr.Get("HX-Refresh") != "" {
 		t.Error("a page that didn't click shouldn't reload")
 	}

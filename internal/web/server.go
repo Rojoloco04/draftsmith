@@ -134,6 +134,9 @@ type Base struct {
 	Status Status
 	Sync   syncView
 	Now    time.Time
+	// Rank is the latest snapshot for the header (solo queue unless flex
+	// is selected); nil before the first one.
+	Rank *db.RankSnapshot
 }
 
 type queueOpt struct {
@@ -159,11 +162,17 @@ func queueFrom(r *http.Request) queueOpt {
 }
 
 func (s *Server) base(r *http.Request, title, nav string) Base {
-	return Base{
+	b := Base{
 		Title: title, Nav: nav, Path: r.URL.Path, RiotID: s.riotID,
 		Queue: queueFrom(r), Queues: queueOpts,
 		Status: s.getStatus(), Sync: s.syncView(false), Now: time.Now(),
 	}
+	rank, err := s.db.LatestRank(r.Context(), rankQueue(b.Queue))
+	if err != nil {
+		s.log.Printf("latest rank: %v", err)
+	}
+	b.Rank = rank
+	return b
 }
 
 // render executes a page. With block set (htmx partial requests) only that
@@ -269,8 +278,9 @@ func securityHeaders(h http.Handler) http.Handler {
 		hd.Set("X-Content-Type-Options", "nosniff")
 		hd.Set("Referrer-Policy", "no-referrer")
 		hd.Set("X-Frame-Options", "DENY")
-		// Images come from Riot's Data Dragon CDN; everything else is ours.
-		hd.Set("Content-Security-Policy", "default-src 'self'; img-src 'self' https://ddragon.leagueoflegends.com data:; style-src 'self' 'unsafe-inline'; script-src 'self'")
+		// Images come from Riot's Data Dragon CDN and, for ranked
+		// emblems, CommunityDragon; everything else is ours.
+		hd.Set("Content-Security-Policy", "default-src 'self'; img-src 'self' https://ddragon.leagueoflegends.com https://raw.communitydragon.org data:; style-src 'self' 'unsafe-inline'; script-src 'self'")
 		h.ServeHTTP(w, r)
 	})
 }

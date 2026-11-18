@@ -173,9 +173,34 @@ func winRateChart(games []analysis.Game) template.HTML {
 	}.SVG()
 }
 
+// matchRow is a game in a match list, with my items, spells and runes
+// when the index has them.
+type matchRow struct {
+	analysis.Game
+	Line    analysis.PlayerLine
+	HasLine bool
+}
+
+func (s *Server) matchRows(r *http.Request, games []analysis.Game) ([]matchRow, error) {
+	ids := make([]string, len(games))
+	for i, g := range games {
+		ids[i] = g.MatchID
+	}
+	lines, err := s.db.MyLines(r.Context(), ids)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]matchRow, len(games))
+	for i, g := range games {
+		rows[i].Game = g
+		rows[i].Line, rows[i].HasLine = lines[g.MatchID]
+	}
+	return rows, nil
+}
+
 type matchesData struct {
 	Base
-	Games      []analysis.Game
+	Games      []matchRow
 	Total      int
 	Page       int
 	Pages      int
@@ -209,7 +234,11 @@ func (s *Server) matches(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(d.Champions, func(i, j int) bool { return champName(d.Champions[i]) < champName(d.Champions[j]) })
 
 	f := db.GameFilter{Queue: d.Queue.ID, Role: d.Role, Champion: d.Champion}
-	d.Games, d.Total, err = s.db.GamePage(r.Context(), f, (d.Page-1)*pageSize, pageSize)
+	games, total, err := s.db.GamePage(r.Context(), f, (d.Page-1)*pageSize, pageSize)
+	if err == nil {
+		d.Total = total
+		d.Games, err = s.matchRows(r, games)
+	}
 	if err != nil {
 		s.fail(w, r, http.StatusInternalServerError, err)
 		return
@@ -236,6 +265,8 @@ func (s *Server) matches(w http.ResponseWriter, r *http.Request) {
 type matchData struct {
 	Base
 	Game      analysis.Game
+	Me        analysis.PlayerLine
+	Opp       *analysis.PlayerLine // my lane opponent, if known
 	Teams     []team
 	MaxDamage int
 	GoldChart template.HTML
@@ -278,8 +309,14 @@ func (s *Server) match(w http.ResponseWriter, r *http.Request) {
 		t.Gold += p.Gold
 		if p.Me {
 			t.Mine = true
+			d.Me = p
 		}
 		d.MaxDamage = max(d.MaxDamage, p.Damage)
+	}
+	for i, p := range det.Players {
+		if g.Opponent != "" && p.Champion == g.Opponent && p.TeamID != d.Me.TeamID && p.Position == d.Me.Position {
+			d.Opp = &det.Players[i]
+		}
 	}
 	d.Teams = []team{blue, red}
 	if red.Mine { // my team first
@@ -387,7 +424,7 @@ type championData struct {
 	Stats    analysis.Group
 	Roles    []analysis.Group
 	Matchups []analysis.Group
-	Games    []analysis.Game
+	Games    []matchRow
 	WRChart  template.HTML
 	Meta     championMeta
 }
@@ -419,8 +456,13 @@ func (s *Server) champion(w http.ResponseWriter, r *http.Request) {
 	analysis.SortByGames(d.Roles)
 	d.Matchups = analysis.Matchups(games, "", sum.Base, 1)
 	analysis.SortByGames(d.Matchups)
+	newest := make([]analysis.Game, 0, len(games))
 	for i := len(games) - 1; i >= 0; i-- {
-		d.Games = append(d.Games, games[i])
+		newest = append(newest, games[i])
+	}
+	if d.Games, err = s.matchRows(r, newest); err != nil {
+		s.fail(w, r, http.StatusInternalServerError, err)
+		return
 	}
 	d.WRChart = winRateChart(games)
 	d.Meta = s.championMeta(r, name, d.Patch, games)

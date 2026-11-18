@@ -10,27 +10,51 @@
   <p>Nothing is indexed for {{.Queue.Label}}. Run <code>draftsmith sync</code>, or wait for the background sync.</p>
 </section>
 {{else}}
-<div class="grid two">
-  <section class="card rank">
-    <h2>Rank</h2>
-    {{with .Rank}}
-      <div class="rank-now">
-        <strong>{{.Tier}} {{.Division}}</strong>
-        <span>{{.LP}} LP</span>
-        <span class="muted">{{.Wins}}W {{.Losses}}L this split · as of {{.Day}}</span>
+<section class="hero">
+  {{with .TopChamps}}<img class="splash" src="{{splashImg (index . 0).Key}}" alt="">{{end}}
+  <div class="hero-body">
+    <div class="hero-rank">
+      {{with .Rank}}
+        <span class="emblem"><img src="{{rankEmblem .Tier}}" alt="{{rankLabel .Tier .Division}} emblem"></span>
+        <div>
+          <span class="label">{{$.Queue.Label}}</span>
+          <h2 class="rank-name">{{rankLabel .Tier .Division}}</h2>
+          <p class="rank-line"><strong>{{.LP}} LP</strong> <span class="muted">· {{.Wins}}W {{.Losses}}L · {{pct (recordPct .Wins .Losses)}} this split</span></p>
+          <p class="muted small">{{$.RiotID}} · as of {{.Day}}</p>
+        </div>
+      {{else}}
+        <span class="emblem"><img src="{{rankEmblem ""}}" alt=""></span>
+        <div>
+          <span class="label">{{$.Queue.Label}}</span>
+          <h2 class="rank-name">Unranked</h2>
+          <p class="muted small">No rank snapshot yet. Each sync records today's standing.</p>
+        </div>
+      {{end}}
+    </div>
+    <div class="hero-form">
+      <span class="label">Last {{len .Recent}} games</span>
+      <div class="streak" aria-label="Last 10 games, newest first">
+        {{range .Recent}}<a href="/matches/{{path .MatchID}}" class="{{if .Win}}w{{else}}l{{end}}" title="{{champ .Champion}} {{if .Win}}win{{else}}loss{{end}}, {{.Start.Format "Jan 2"}}"><span class="icon" data-initials="{{initials .Champion}}"><img src="{{champImg .Champion .Patch}}" alt="" loading="lazy" width="36" height="36"></span><b>{{if .Win}}W{{else}}L{{end}}</b></a>{{end}}
       </div>
-      {{$.LPChart}}
-      {{if lt $.RankDays 7}}<p class="note">Riot only exposes the current standing, so history starts with the first snapshot ({{$.RankFrom}}) and grows by one point per day of syncing.</p>{{end}}
+    </div>
+  </div>
+</section>
+
+{{template "tiles" .Sum.Overall}}
+
+<div class="grid two">
+  <section class="card">
+    <h2>Rank history</h2>
+    {{if .Rank}}
+      {{.LPChart}}
+      {{if lt .RankDays 7}}<p class="note">Riot only exposes the current standing, so history starts with the first snapshot ({{.RankFrom}}) and grows by one point per day of syncing.</p>{{end}}
     {{else}}
-      <p class="muted">No rank snapshot yet. Each sync records today's standing.</p>
+      <p class="muted">No rank snapshot yet.</p>
     {{end}}
   </section>
 
   <section class="card">
     <h2>Recent form</h2>
-    <div class="streak" aria-label="Last 10 games, newest first">
-      {{range .Recent}}<a href="/matches/{{path .MatchID}}" class="{{if .Win}}w{{else}}l{{end}}" title="{{champ .Champion}} {{if .Win}}win{{else}}loss{{end}}, {{.Start.Format "Jan 2"}}">{{if .Win}}W{{else}}L{{end}}</a>{{end}}
-    </div>
     {{if .WRChart}}
       <div class="legend"><span class="key s1"></span>Last 20 <span class="key s2"></span>Last 10 <span class="key ref"></span>50%</div>
       {{.WRChart}}
@@ -40,17 +64,15 @@
   </section>
 </div>
 
-{{template "tiles" .Sum.Overall}}
-
 <div class="grid two">
   <section class="card">
-    <h2>Top champions</h2>
+    <div class="card-head"><h2>Top champions</h2><a class="more" href="/champions?queue={{.Queue.Key}}">All champions<svg class="i"><use href="#i-arrow"/></svg></a></div>
     <table class="tbl">
       <thead><tr><th>Champion</th><th class="r">Games</th><th class="r" title="Win rate blended with 10 games at your overall win rate">Adj. WR</th><th class="r">KDA</th><th class="r">CS/m</th></tr></thead>
       <tbody>
       {{range .TopChamps}}
         <tr>
-          <td><a class="champ" href="/champions/{{path .Key}}?queue={{$.Queue.Key}}"><span class="icon" data-initials="{{initials .Key}}"><img src="{{champImg .Key $.Patch}}" alt="" loading="lazy" width="28" height="28"></span>{{champ .Key}}</a></td>
+          <td><a class="champ" href="/champions/{{path .Key}}?queue={{$.Queue.Key}}"><span class="icon" data-initials="{{initials .Key}}"><img src="{{champImg .Key $.Patch}}" alt="" loading="lazy" width="32" height="32"></span>{{champ .Key}}</a></td>
           <td class="r"><strong>{{.Games}}</strong> <span class="muted">{{.Wins}}-{{.Losses}}</span></td>
           <td class="r {{if ge .Games 5}}{{wrClass .Adjusted}}{{end}}">{{pct .Adjusted}}</td>
           <td class="r">{{num .KDA 2}}</td>
@@ -59,7 +81,7 @@
       {{end}}
       </tbody>
     </table>
-    <p class="note">Overall win rate {{pct .Sum.Base}}. Small samples are pulled toward it; see <a href="/champions?queue={{.Queue.Key}}">all champions</a>.</p>
+    <p class="note">Overall win rate {{pct .Sum.Base}}. Small samples are pulled toward it.</p>
   </section>
 
   <section class="card">
@@ -67,7 +89,7 @@
     <div class="bars">
     {{range .Sum.Roles}}
       <div class="bar-row">
-        <span class="bar-label">{{.Key}}</span>
+        <span class="bar-label">{{template "role" .Key}}{{.Key}}</span>
         <span class="bar"><span style="width: {{widthPct .Games $.RoleMax}}"></span></span>
         <span class="bar-val"><strong>{{.Games}}</strong> <span class="{{wrClass .WinRate}}">{{pct .WinRate}}</span></span>
       </div>

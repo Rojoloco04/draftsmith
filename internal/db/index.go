@@ -163,10 +163,11 @@ func (d *DB) indexMatch(ctx context.Context, s *store.Store, id, puuid string) (
 	}
 	for _, p := range det.Players {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO participants (match_id, participant_id, team_id, position, champion,
-			me, win, level, kills, deaths, assists, cs, gold, damage, vision, items)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			me, win, level, kills, deaths, assists, cs, gold, damage, vision, items, spells, runes)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			id, p.ParticipantID, p.TeamID, p.Position, p.Champion, p.Me, p.Win, p.Level,
-			p.Kills, p.Deaths, p.Assists, p.CS, p.Gold, p.Damage, p.Vision, joinItems(p.Items)); err != nil {
+			p.Kills, p.Deaths, p.Assists, p.CS, p.Gold, p.Damage, p.Vision,
+			joinInts(p.Items[:]), joinInts(p.Spells[:]), joinRunes(p.Runes)); err != nil {
 			return false, err
 		}
 	}
@@ -239,18 +240,37 @@ func placeholders(n int) string {
 	return strings.TrimSuffix(strings.Repeat("?, ", n), ", ")
 }
 
-func joinItems(items [7]int) string {
-	parts := make([]string, len(items))
-	for i, it := range items {
-		parts[i] = strconv.Itoa(it)
+func joinInts(xs []int) string {
+	parts := make([]string, len(xs))
+	for i, x := range xs {
+		parts[i] = strconv.Itoa(x)
 	}
 	return strings.Join(parts, ",")
 }
 
-func splitItems(s string) [7]int {
-	var out [7]int
-	for i, p := range strings.SplitN(s, ",", 7) {
+// splitInts fills out from a comma separated list, leaving missing or
+// malformed entries 0.
+func splitInts(s string, out []int) {
+	for i, p := range strings.SplitN(s, ",", len(out)) {
 		out[i], _ = strconv.Atoi(p)
 	}
-	return out
+}
+
+func joinRunes(r analysis.Runes) string {
+	xs := []int{r.PrimaryStyle}
+	xs = append(xs, r.Primary[:]...)
+	xs = append(xs, r.SubStyle)
+	xs = append(xs, r.Sub[:]...)
+	xs = append(xs, r.Shards[:]...)
+	return joinInts(xs)
+}
+
+func splitRunes(s string) analysis.Runes {
+	var xs [11]int
+	splitInts(s, xs[:])
+	r := analysis.Runes{PrimaryStyle: xs[0], SubStyle: xs[5]}
+	copy(r.Primary[:], xs[1:5])
+	copy(r.Sub[:], xs[6:8])
+	copy(r.Shards[:], xs[8:11])
+	return r
 }

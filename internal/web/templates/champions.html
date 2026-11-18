@@ -16,8 +16,8 @@
     <li>
       <span class="icon" data-initials="{{initials .Champion}}"><img src="{{champImg .Champion $.Patch}}" alt="" loading="lazy" width="28" height="28"></span>
       <span><a href="/champions/{{path .Champion}}?queue={{$.Queue.Key}}"><strong>{{champ .Champion}}</strong></a>
-        <span class="muted">{{pos .Position}} · {{.Games}} games · {{pct .Adjusted}} adjusted</span>
-        {{if .InMeta}}<span class="tierb t{{.Meta.Tier}}">{{if eq .Meta.Tier 1}}OP{{else}}T{{.Meta.Tier}}{{end}}</span>{{end}}</span>
+        {{if .InMeta}}{{template "tierBadge" .Meta.Tier}}{{end}}
+        <span class="muted role-line">{{template "role" .Position}}{{pos .Position}} · {{.Games}} games · {{pct .Adjusted}} adjusted</span></span>
       <span class="why">{{.Note}}</span>
     </li>
   {{end}}
@@ -26,7 +26,7 @@
 </section>
 {{end}}
 <section class="card">
-  <p class="note">Adjusted win rate blends each champion's record with 10 games at your overall win rate ({{pct .Sum.Base}}), so a 3-0 champion doesn't top the list. Check the game count before reading much into a row.</p>
+  <p class="note top">Adjusted win rate blends each champion's record with 10 games at your overall win rate ({{pct .Sum.Base}}), so a 3-0 champion doesn't top the list. Check the game count before reading much into a row.</p>
   <div class="scroll">
   <table class="tbl champs">
     <thead><tr>
@@ -46,7 +46,7 @@
     <tbody>
     {{range .Rows}}
       <tr>
-        <td><a class="champ" href="/champions/{{path .Key}}?queue={{$q}}"><span class="icon" data-initials="{{initials .Key}}"><img src="{{champImg .Key $.Patch}}" alt="" loading="lazy" width="28" height="28"></span>{{champ .Key}}</a></td>
+        <td><a class="champ" href="/champions/{{path .Key}}?queue={{$q}}"><span class="icon" data-initials="{{initials .Key}}"><img src="{{champImg .Key $.Patch}}" alt="" loading="lazy" width="32" height="32"></span>{{champ .Key}}</a></td>
         <td class="r"><strong>{{.Games}}</strong> <span class="muted">{{.Wins}}-{{.Losses}}</span></td>
         <td class="r {{if ge .Games 5}}{{wrClass .Adjusted}}{{end}}"><strong>{{pct .Adjusted}}</strong></td>
         <td class="r muted">{{pct .WinRate}}</td>
@@ -57,7 +57,7 @@
         <td class="r">{{pct .KillPart}}</td>
         <td class="r">{{num .DeathsBefore15 1}}</td>
         {{$f := index $.FitBy .Key}}
-        <td>{{if $f.InMeta}}<span class="tierb t{{$f.Meta.Tier}}" title="OP.GG {{pos $f.Position}}, rank {{$f.Meta.Rank}}">{{if eq $f.Meta.Tier 1}}OP{{else}}T{{$f.Meta.Tier}}{{end}}</span>{{else}}<span class="muted">-</span>{{end}}</td>
+        <td>{{if $f.InMeta}}<span class="meta-cell" title="OP.GG {{pos $f.Position}}, rank {{$f.Meta.Rank}}">{{template "role" $f.Position}}{{template "tierBadge" $f.Meta.Tier}}</span>{{else}}<span class="muted">-</span>{{end}}</td>
       </tr>
     {{end}}
     </tbody>

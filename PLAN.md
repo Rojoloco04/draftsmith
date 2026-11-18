@@ -32,6 +32,10 @@ The dashboard's Refresh button (sync now, reload when done) was merged into `mai
 
 Phase 3 is in progress on branch `phase3-watch` (rebased on `main`; see the Phase 3 section): client discovery, gameflow polling, reading champ select (checked against a real ranked champ select), lane odds for the enemy team, and suggestions with rune pages logged by `watch`.
 
+UI refresh (on `phase3-watch`, 2026-11-17): new stylesheet (sticky header with icon nav, splash-art heroes on the overview, champion and match pages, rounded champion icons), ranked emblem and crest from CommunityDragon (`raw.communitydragon.org`, added to the CSP's `img-src`), role glyphs drawn as an inline SVG sprite in `layout.html`, and summoner spells, keystone and secondary tree on every match row and player line. That needed `spells` and `runes` columns on `participants`, so `db.SchemaVersion` is 2 and the first `serve` after upgrading rebuilds the index. Rune 8230 is now "Stormraider's Surge" (was Phase Rush) in Data Dragon. Checked by hand against the real archive in dark and light mode and at ~500px wide (headless Chrome works for screenshots; headless Edge on this machine exits without writing one, and desktop Chrome can't go narrower than ~500px, so true phone width needs DevTools emulation).
+
+UI direction (from the user, 2026-11-17): they like the refresh as a baseline but want to "get crazier" later with something more innovative, not just a cleaner OP.GG clone. Ideas to bring to that session, none decided: a death heatmap across games on the rift, a champion pool "constellation" or matchup grid instead of tables, animated LP/form timelines, per-game story views (gold swing moments from the timeline), and a champ select page that feels like an overlay rather than a dashboard. Ask before committing to one; the user picks the direction.
+
 **Next up:** the dashboard's champ select page, fed live by `watch` (SSE), then the overlay: a borderless always-on-top window docked to the League client that shows that page during champ select only. See "Overlay" in the Phase 3 section. Team comp gaps (damage mix, frontline) are not in the score yet.
 
 Handoff notes (things a new session would otherwise rediscover):
@@ -132,7 +136,7 @@ Decided:
 
 Left:
 
-- Rune names and icons: `Analysis.Runes` already has the ids an LCU page needs; display needs Data Dragon's `runesReforged.json`. Do it with Phase 3's rune import.
+- ~~Rune names and icons~~: done with the UI refresh (below). `internal/web/ddragon` embeds Data Dragon's `runesReforged.json` and `summoner.json`; the champion page's OP.GG card shows the most played rune page as icons.
 - `lol_get_lane_matchup_guide` isn't wrapped yet; Phase 3's matchup view is the first real use.
 - The `data/meta/*.json` files from `meta call` are only probes now; nothing reads them.
 

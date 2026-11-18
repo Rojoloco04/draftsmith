@@ -100,21 +100,17 @@ func (d *DB) Match(ctx context.Context, id string) (analysis.Game, analysis.Deta
 		return g, det, err
 	}
 
-	rows, err = d.sql.QueryContext(ctx, `SELECT participant_id, team_id, position, champion, me, win, level,
-		kills, deaths, assists, cs, gold, damage, vision, items
+	rows, err = d.sql.QueryContext(ctx, `SELECT `+playerColumns+`
 		FROM participants WHERE match_id = ? ORDER BY participant_id`, id)
 	if err != nil {
 		return g, det, err
 	}
 	for rows.Next() {
-		var p analysis.PlayerLine
-		var items string
-		if err := rows.Scan(&p.ParticipantID, &p.TeamID, &p.Position, &p.Champion, &p.Me, &p.Win, &p.Level,
-			&p.Kills, &p.Deaths, &p.Assists, &p.CS, &p.Gold, &p.Damage, &p.Vision, &items); err != nil {
+		p, err := scanPlayer(rows)
+		if err != nil {
 			rows.Close()
 			return g, det, err
 		}
-		p.Items = splitItems(items)
 		det.Players = append(det.Players, p)
 	}
 	rows.Close()
@@ -213,6 +209,22 @@ func (d *DB) RankHistory(ctx context.Context, queue string) ([]RankSnapshot, err
 	return out, rows.Err()
 }
 
+// LatestRank returns the newest snapshot for a queue, or nil if there is
+// none.
+func (d *DB) LatestRank(ctx context.Context, queue string) (*RankSnapshot, error) {
+	var r RankSnapshot
+	err := d.sql.QueryRowContext(ctx, `SELECT day, queue, tier, division, lp, wins, losses
+		FROM rank_snapshots WHERE queue = ? ORDER BY day DESC LIMIT 1`, queue).
+		Scan(&r.Day, &r.Queue, &r.Tier, &r.Division, &r.LP, &r.Wins, &r.Losses)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
 // Queues lists the queue ids that have indexed games, most games first.
 func (d *DB) Queues(ctx context.Context) ([]int, error) {
 	rows, err := d.sql.QueryContext(ctx, `SELECT queue FROM games GROUP BY queue ORDER BY count(*) DESC, queue`)
@@ -227,6 +239,52 @@ func (d *DB) Queues(ctx context.Context) ([]int, error) {
 			return nil, err
 		}
 		out = append(out, q)
+	}
+	return out, rows.Err()
+}
+
+const playerColumns = `participant_id, team_id, position, champion, me, win, level,
+	kills, deaths, assists, cs, gold, damage, vision, items, spells, runes`
+
+// scanPlayer reads playerColumns, after any lead columns into lead.
+func scanPlayer(rows *sql.Rows, lead ...any) (analysis.PlayerLine, error) {
+	var p analysis.PlayerLine
+	var items, spells, runes string
+	dest := append(lead, &p.ParticipantID, &p.TeamID, &p.Position, &p.Champion, &p.Me, &p.Win, &p.Level,
+		&p.Kills, &p.Deaths, &p.Assists, &p.CS, &p.Gold, &p.Damage, &p.Vision, &items, &spells, &runes)
+	if err := rows.Scan(dest...); err != nil {
+		return p, err
+	}
+	splitInts(items, p.Items[:])
+	splitInts(spells, p.Spells[:])
+	p.Runes = splitRunes(runes)
+	return p, nil
+}
+
+// MyLines returns my end-of-game line (items, spells, runes) for each of
+// the given matches, keyed by match id. Matches without one are left out.
+func (d *DB) MyLines(ctx context.Context, ids []string) (map[string]analysis.PlayerLine, error) {
+	out := map[string]analysis.PlayerLine{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := d.sql.QueryContext(ctx, `SELECT match_id, `+playerColumns+`
+		FROM participants WHERE me = 1 AND match_id IN (`+strings.TrimSuffix(strings.Repeat("?, ", len(ids)), ", ")+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		p, err := scanPlayer(rows, &id)
+		if err != nil {
+			return nil, err
+		}
+		out[id] = p
 	}
 	return out, rows.Err()
 }

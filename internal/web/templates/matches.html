@@ -7,19 +7,19 @@
 <form class="filters" action="/matches" method="get"
       hx-get="/matches" hx-target="#results" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change">
   <input type="hidden" name="queue" value="{{.Queue.Key}}">
-  <label>Role
-    <select name="role">
-      <option value="">All roles</option>
-      {{range .Roles}}<option value="{{.}}" {{if eq . $.Role}}selected{{end}}>{{role .}}</option>{{end}}
-    </select>
-  </label>
-  <label>Champion
+  <fieldset class="chips">
+    <legend class="label">Role</legend>
+    <label class="chip"><input type="radio" name="role" value="" {{if not $.Role}}checked{{end}}><span>All</span></label>
+    {{range .Roles}}<label class="chip" title="{{role .}}"><input type="radio" name="role" value="{{.}}" {{if eq . $.Role}}checked{{end}}><span>{{template "role" .}}<span class="chip-text">{{role .}}</span></span></label>{{end}}
+  </fieldset>
+  <label class="select">
+    <span class="label">Champion</span>
     <select name="champion">
       <option value="">All champions</option>
       {{range .Champions}}<option value="{{.}}" {{if eq . $.Champion}}selected{{end}}>{{champ .}}</option>{{end}}
     </select>
   </label>
-  <noscript><button type="submit">Filter</button></noscript>
+  <noscript><button class="btn" type="submit">Filter</button></noscript>
 </form>
 
 {{template "results" .}}
@@ -35,8 +35,8 @@
   {{end}}
   {{if gt .Pages 1}}
   <nav class="pager" hx-target="#results" hx-swap="outerHTML" hx-push-url="true">
-    {{if .PrevQuery}}<a href="/matches?{{.PrevQuery}}" hx-get="/matches?{{.PrevQuery}}">← Newer</a>{{else}}<span></span>{{end}}
-    {{if .NextQuery}}<a href="/matches?{{.NextQuery}}" hx-get="/matches?{{.NextQuery}}">Older →</a>{{end}}
+    {{if .PrevQuery}}<a class="btn" href="/matches?{{.PrevQuery}}" hx-get="/matches?{{.PrevQuery}}">← Newer</a>{{else}}<span></span>{{end}}
+    {{if .NextQuery}}<a class="btn" href="/matches?{{.NextQuery}}" hx-get="/matches?{{.NextQuery}}">Older →</a>{{end}}
   </nav>
   {{end}}
 </div>

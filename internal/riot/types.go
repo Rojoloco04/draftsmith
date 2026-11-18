@@ -50,6 +50,28 @@ type Participant struct {
 	Item4                       int    `json:"item4"`
 	Item5                       int    `json:"item5"`
 	Item6                       int    `json:"item6"` // trinket
+	Summoner1ID                 int    `json:"summoner1Id"`
+	Summoner2ID                 int    `json:"summoner2Id"`
+	Perks                       Perks  `json:"perks"`
+}
+
+// Perks is a participant's rune page.
+type Perks struct {
+	StatPerks struct {
+		Offense int `json:"offense"`
+		Flex    int `json:"flex"`
+		Defense int `json:"defense"`
+	} `json:"statPerks"`
+	// Styles holds the primary tree first, then the secondary.
+	Styles []PerkStyle `json:"styles"`
+}
+
+type PerkStyle struct {
+	Description string `json:"description"` // primaryStyle, subStyle
+	Style       int    `json:"style"`
+	Selections  []struct {
+		Perk int `json:"perk"`
+	} `json:"selections"`
 }
 
 // Items returns item0..item6 (0 for an empty slot); the last is the trinket.

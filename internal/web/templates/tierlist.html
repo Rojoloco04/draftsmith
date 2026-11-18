@@ -1,9 +1,9 @@
 {{define "content"}}
 <div class="pagehead">
   <h1>Tier list</h1>
-  <div class="seg" role="group" aria-label="Position">
+  <div class="seg roles" role="group" aria-label="Position">
     {{$cur := .Position}}{{$q := .Queue.Key}}{{$s := .Sort}}
-    {{range .Positions}}<a href="/tier-list?queue={{$q}}&amp;position={{.Key}}&amp;sort={{$s}}" {{if eq .Key $cur}}aria-current="true"{{end}}>{{.Label}}{{if .Games}} <span class="count">{{.Games}}</span>{{end}}</a>{{end}}
+    {{range .Positions}}<a href="/tier-list?queue={{$q}}&amp;position={{.Key}}&amp;sort={{$s}}" {{if eq .Key $cur}}aria-current="true"{{end}}>{{template "role" .Key}}<span class="seg-text">{{.Label}}</span>{{if .Games}} <span class="count">{{.Games}}</span>{{end}}</a>{{end}}
   </div>
 </div>
 
@@ -31,10 +31,10 @@
         <td class="r muted">{{.Rank}}</td>
         <td>
           {{if .Mine.Games}}<a class="champ" href="/champions/{{path .Key}}?queue={{$q}}">{{else}}<span class="champ">{{end}}
-          <span class="icon" data-initials="{{initials .Name}}"><img src="{{champImg .Key $.Patch}}" alt="" loading="lazy" width="28" height="28"></span>{{.Name}}
+          <span class="icon" data-initials="{{initials .Name}}"><img src="{{champImg .Key $.Patch}}" alt="" loading="lazy" width="32" height="32"></span>{{.Name}}
           {{if .Mine.Games}}</a>{{else}}</span>{{end}}
         </td>
-        <td><span class="tierb t{{.Tier}}">{{if eq .Tier 1}}OP{{else}}T{{.Tier}}{{end}}</span></td>
+        <td>{{template "tierBadge" .Tier}}</td>
         <td class="r">{{pct1 .WinRate}}</td>
         <td class="r muted">{{thousands .Play}}</td>
         <td class="r">{{pct .PickRate}}</td>

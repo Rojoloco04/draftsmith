@@ -1,6 +1,22 @@
 {{define "content"}}
-<div class="pagehead">
-  <h1 class="champ"><span class="icon xl" data-initials="{{initials .Name}}"><img src="{{champImg .Name .Patch}}" alt="" width="56" height="56"></span>{{champ .Name}}</h1>
+<section class="hero chero">
+  <img class="splash" src="{{splashImg .Name}}" alt="">
+  <div class="hero-body">
+    <span class="icon xl" data-initials="{{initials .Name}}"><img src="{{champImg .Name .Patch}}" alt="" width="72" height="72"></span>
+    <div class="mhead-main">
+      <h1>{{champ .Name}}</h1>
+      <p class="role-tags">{{range .Roles}}<span class="tag">{{template "role" .Key}}{{.Key}} <span class="muted">{{.Games}}</span></span>{{end}}</p>
+    </div>
+    <div class="mhead-kda">
+      <span class="label">Adjusted win rate</span>
+      <strong class="{{if ge .Stats.Games 5}}{{wrClass .Stats.Adjusted}}{{end}}">{{pct .Stats.Adjusted}}</strong>
+      <span class="muted">{{.Stats.Wins}}W {{.Stats.Losses}}L</span>
+    </div>
+  </div>
+</section>
+
+<div class="pagehead sub">
+  <span class="muted">Your games on {{champ .Name}}</span>
   {{template "queueSwitch" .Base}}
 </div>
 
@@ -14,7 +30,7 @@
     {{if gt (len .Roles) 1}}
     <table class="tbl">
       <thead><tr><th>Role</th><th class="r">Games</th><th class="r">Win rate</th></tr></thead>
-      <tbody>{{range .Roles}}<tr><td>{{.Key}}</td><td class="r">{{.Games}}</td><td class="r {{wrClass .WinRate}}">{{pct .WinRate}}</td></tr>{{end}}</tbody>
+      <tbody>{{range .Roles}}<tr><td><span class="role-line">{{template "role" .Key}}{{.Key}}</span></td><td class="r">{{.Games}}</td><td class="r {{wrClass .WinRate}}">{{pct .WinRate}}</td></tr>{{end}}</tbody>
     </table>
     {{end}}
     {{if .WRChart}}<div class="legend"><span class="key s1"></span>Last 20 <span class="key s2"></span>Last 10</div>{{.WRChart}}{{end}}
@@ -28,7 +44,7 @@
       <tbody>
       {{range .Matchups}}
         <tr>
-          <td><span class="champ"><span class="icon" data-initials="{{initials .Key}}"><img src="{{champImg .Key $.Patch}}" alt="" loading="lazy" width="28" height="28"></span>{{champ .Key}}</span></td>
+          <td><span class="champ"><span class="icon" data-initials="{{initials .Key}}"><img src="{{champImg .Key $.Patch}}" alt="" loading="lazy" width="32" height="32"></span>{{champ .Key}}</span></td>
           <td class="r"><strong>{{.Games}}</strong> <span class="muted">{{.Wins}}-{{.Losses}}</span></td>
           <td class="r {{if ge .Games 3}}{{wrClass .WinRate}}{{end}}">{{pct .WinRate}}</td>
           <td class="r {{diffClass .CSDiff10}}">{{signed .CSDiff10 1}}</td>
@@ -45,18 +61,25 @@
 </div>
 
 <section class="card">
-  <h2>OP.GG{{with .Meta.Position}} {{pos .}}{{end}} <span class="muted">Emerald+</span></h2>
+  <h2>OP.GG{{with .Meta.Position}} <span class="role-line">{{template "role" .}}{{pos .}}</span>{{end}} <span class="muted">Emerald+</span></h2>
   {{if .Meta.Err}}{{template "metaError" .Meta.Err}}
   {{else}}{{with .Meta}}
   {{template "metaFreshness" .Freshness}}
   <div class="meta-stats">
-    <div><span class="label">Tier</span><span><span class="tierb t{{.Tier}}">{{if eq .Tier 1}}OP{{else}}T{{.Tier}}{{end}}</span> <span class="muted">#{{.Rank}}</span></span></div>
+    <div><span class="label">Tier</span><span>{{template "tierBadge" .Tier}} <span class="muted">#{{.Rank}}</span></span></div>
     <div><span class="label">Win rate</span><strong>{{pct .WinRate}}</strong></div>
     <div><span class="label">Pick</span><strong>{{pct .PickRate}}</strong></div>
     <div><span class="label">Ban</span><strong>{{pct .BanRate}}</strong></div>
     <div><span class="label">Games</span><strong>{{thousands .Play}}</strong></div>
     {{with .DamageType}}<div><span class="label">Damage</span><strong>{{.}}</strong></div>{{end}}
   </div>
+  {{if .Runes.Primary}}
+  <div class="meta-runes">
+    <h3>Most played runes</h3>
+    {{template "runePage" (opggRunes .Runes)}}
+    {{if .Runes.Play}}<p class="note">{{thousands .Runes.Play}} games, {{pct1 (recordPct .Runes.Win (sub .Runes.Play .Runes.Win))}} win rate{{if .Runes.PickRate}}, picked {{pct .Runes.PickRate}} of the time{{end}}.</p>{{end}}
+  </div>
+  {{end}}
   <div class="grid two">
     <div>
       <h3>Does best into</h3>
@@ -72,7 +95,7 @@
 </section>
 
 <section>
-  <h2>Games</h2>
+  <h2 class="section-title">Games</h2>
   <div class="mlist">{{range .Games}}{{template "matchRow" .}}{{end}}</div>
 </section>
 {{end}}

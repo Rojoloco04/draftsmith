@@ -4,8 +4,8 @@
      with .Wait the response to the last poll reloads the page. */}}
 {{define "sync"}}
 <span id="sync" class="sync"{{if .Syncing}} hx-get="/sync{{if .Wait}}?wait=1{{end}}" hx-trigger="every 1s" hx-swap="outerHTML"{{end}}>
-  {{if .Syncing}}<span class="pill live">Syncing…</span>
-  {{else if .CanRefresh}}<button type="button" class="btn" hx-post="/sync" hx-target="#sync" hx-swap="outerHTML" title="Check the Riot API for new games now (last sync {{ago .LastSync}})">Refresh</button>
+  {{if .Syncing}}<span class="pill live"><span class="spin"></span>Syncing…</span>
+  {{else if .CanRefresh}}<button type="button" class="btn" hx-post="/sync" hx-target="#sync" hx-swap="outerHTML" title="Check the Riot API for new games now (last sync {{ago .LastSync}})"><svg class="i"><use href="#i-refresh"/></svg><span>Refresh</span></button>
   {{end}}
 </span>
 {{end}}
@@ -17,27 +17,68 @@
 </div>
 {{end}}
 
+{{/* A role glyph from the layout's sprite. Takes any role spelling
+     (MIDDLE, Mid, mid). */}}
+{{define "role"}}{{with roleKey .}}<svg class="ri" role="img" aria-label="{{roleLabel .}}"><title>{{roleLabel .}}</title><use href="#r-{{.}}"/></svg>{{end}}{{end}}
+
+{{/* Icons for one rune id and one summoner spell (dict ID, Patch). Unknown
+     ids leave an empty slot. */}}
+{{define "rune"}}<span class="rn" title="{{runeName .}}">{{with runeImg .}}<img src="{{.}}" alt="" loading="lazy" width="22" height="22">{{end}}</span>{{end}}
+{{define "spell"}}<span class="sp" title="{{spellName .ID}}">{{with spellImg .ID .Patch}}<img src="{{.}}" alt="" loading="lazy" width="22" height="22">{{end}}</span>{{end}}
+
+{{/* Summoner spells and keystone + secondary tree, OP.GG style.
+     Takes dict Line (analysis.PlayerLine) and Patch. */}}
+{{define "loadout"}}
+<span class="loadout">
+  <span class="pair">{{range .Line.Spells}}{{template "spell" (dict "ID" . "Patch" $.Patch)}}{{end}}</span>
+  <span class="pair runes"><span class="ks">{{template "rune" .Line.Runes.Keystone}}</span>{{template "rune" .Line.Runes.SubStyle}}</span>
+</span>
+{{end}}
+
+{{/* A full rune page (analysis.Runes). */}}
+{{define "runePage"}}
+<div class="runepage">
+  <div class="tree">
+    <div class="tree-head">{{template "rune" .PrimaryStyle}}<span>{{runeName .PrimaryStyle}}</span></div>
+    <div class="tree-runes">
+      {{range $i, $id := .Primary}}{{if eq $i 0}}<span class="ks-big" title="{{runeName $id}}">{{with runeImg $id}}<img src="{{.}}" alt="" loading="lazy" width="44" height="44">{{end}}</span>{{else}}{{template "rune" $id}}{{end}}{{end}}
+    </div>
+    <p class="ks-name">{{runeName .Keystone}}</p>
+  </div>
+  <div class="tree">
+    <div class="tree-head">{{template "rune" .SubStyle}}<span>{{runeName .SubStyle}}</span></div>
+    <div class="tree-runes">{{range .Sub}}{{template "rune" .}}{{end}}</div>
+    <div class="tree-runes shards">{{range .Shards}}{{template "rune" .}}{{end}}</div>
+  </div>
+</div>
+{{end}}
+
 {{define "matchRow"}}
 <a class="mrow {{if .Remake}}remake{{else if .Win}}win{{else}}loss{{end}}" href="/matches/{{path .MatchID}}">
   <div class="m-result">
     <strong>{{if .Remake}}Remake{{else if .Win}}Victory{{else}}Defeat{{end}}</strong>
     <span>{{queue .Queue}}</span>
-    <span>{{dur .Minutes}}</span>
     <span class="muted" title="{{.Start.Format "Mon Jan 2 2006 15:04"}}">{{ago .Start}}</span>
+    <span class="muted">{{dur .Minutes}}</span>
   </div>
   <div class="m-champ">
-    <span class="icon lg" data-initials="{{initials .Champion}}"><img src="{{champImg .Champion .Patch}}" alt="" loading="lazy" width="48" height="48"></span>
-    <div><strong>{{champ .Champion}}</strong><span class="muted">{{role .Role}}</span></div>
+    <span class="cicon">
+      <span class="icon lg" data-initials="{{initials .Champion}}"><img src="{{champImg .Champion .Patch}}" alt="" loading="lazy" width="48" height="48"></span>
+      {{if .HasLine}}<b class="lvl">{{.Line.Level}}</b>{{end}}
+    </span>
+    {{if .HasLine}}{{template "loadout" (dict "Line" .Line "Patch" .Patch)}}{{end}}
+    <div class="m-name"><strong>{{champ .Champion}}</strong><span class="muted role-line">{{template "role" .Role}}{{role .Role}}</span></div>
   </div>
   <div class="m-kda">
-    <strong>{{.Kills}} / <span class="neg">{{.Deaths}}</span> / {{.Assists}}</strong>
-    <span>{{kda .Kills .Deaths .Assists}} KDA</span>
+    <strong>{{.Kills}} <i>/</i> <span class="neg">{{.Deaths}}</span> <i>/</i> {{.Assists}}</strong>
+    <span class="muted">{{kda .Kills .Deaths .Assists}} KDA</span>
   </div>
   <div class="m-stats">
-    <span>{{.CS}} CS ({{num .CSPerMin 1}})</span>
+    <span>{{.CS}} CS <span class="muted">({{num .CSPerMin 1}})</span></span>
     <span>KP {{pct .KillParticipation}}</span>
-    <span>Vision {{num .VisionPerMin 2}}/m</span>
+    <span class="muted">Vision {{num .VisionPerMin 2}}/m</span>
   </div>
+  <div class="m-items">{{if .HasLine}}{{$p := .Patch}}<span class="items">{{range $i, $it := .Line.Items}}{{if $it}}<img src="{{itemImg $it $p}}" alt="" title="item {{$it}}" loading="lazy" width="24" height="24"{{if eq $i 6}} class="trinket"{{end}}>{{else}}<span class="slot"></span>{{end}}{{end}}</span>{{end}}</div>
   <div class="m-lane">
     <span class="label">Gold @15</span>
     <strong class="{{laneClass .At15 "gold"}}">{{diffInt .At15 "gold"}}</strong>
@@ -54,16 +95,18 @@
 {{define "tiles"}}
 <div class="tiles">
   <div class="tile"><span class="label">Games</span><strong>{{.Games}}</strong><span class="muted">{{.Wins}}W {{.Losses}}L</span></div>
-  <div class="tile"><span class="label">Win rate</span><strong class="{{if ge .Games 5}}{{wrClass .WinRate}}{{end}}">{{pct .WinRate}}</strong></div>
+  <div class="tile"><span class="label">Win rate</span><strong class="{{if ge .Games 5}}{{wrClass .WinRate}}{{end}}">{{pct .WinRate}}</strong><span class="meter"><span style="width: {{pctBar .WinRate}}"></span></span></div>
   <div class="tile"><span class="label">KDA</span><strong>{{num .KDA 2}}</strong><span class="muted">{{num .AvgKills 1}} / {{num .AvgDeaths 1}} / {{num .AvgAssists 1}}</span></div>
   <div class="tile"><span class="label">CS/min</span><strong>{{num .CSPerMin 1}}</strong></div>
-  <div class="tile"><span class="label">Kill part.</span><strong>{{pct .KillPart}}</strong></div>
+  <div class="tile"><span class="label">Kill part.</span><strong>{{pct .KillPart}}</strong><span class="meter"><span style="width: {{pctBar .KillPart}}"></span></span></div>
   <div class="tile"><span class="label">Gold diff @15</span><strong class="{{diffClass .GoldDiff15}}">{{signed .GoldDiff15 0}}</strong><span class="muted">CS @10 {{signed .CSDiff10 1}}</span></div>
 </div>
 {{end}}
 
+{{define "tierBadge"}}<span class="tierb t{{.}}">{{if eq . 1}}OP{{else}}T{{.}}{{end}}</span>{{end}}
+
 {{define "metaFreshness"}}
-<p class="fresh{{if .Stale}} stale{{end}}">OP.GG data{{if .Patch}} for patch {{.Patch}}{{end}}, updated {{ago .FetchedAt}}.{{if .Stale}} Showing the cached copy because the refresh failed: {{.RefreshErr}}{{end}}</p>
+<p class="fresh{{if .Stale}} stale{{end}}"><span class="dot"></span>OP.GG data{{if .Patch}} for patch {{.Patch}}{{end}}, updated {{ago .FetchedAt}}.{{if .Stale}} Showing the cached copy because the refresh failed: {{.RefreshErr}}{{end}}</p>
 {{end}}
 
 {{define "metaError"}}

@@ -15,27 +15,45 @@ import (
 )
 
 var funcs = template.FuncMap{
-	"pct":      analysis.Pct,
+	"pct": analysis.Pct,
 	"pct1": func(x float64) string {
 		if math.IsNaN(x) {
 			return "-"
 		}
 		return fmt.Sprintf("%.1f%%", x*100)
 	},
-	"pos":     meta.PositionName,
-	"metaOff": func(err error) bool { return errors.Is(err, errMetaOff) },
-	"signed":   analysis.Signed,
-	"num":      analysis.Num,
-	"role":     analysis.RoleName,
-	"champ":    champName,
-	"champImg": champImg,
-	"itemImg":  itemImg,
-	"queue":    queueName,
-	"kda":      kda,
-	"dur":      duration,
-	"date":     func(t time.Time) string { return t.Format("Jan 2, 2006") },
-	"ago":      ago,
-	"wrClass":  wrClass,
+	"pos":        meta.PositionName,
+	"metaOff":    func(err error) bool { return errors.Is(err, errMetaOff) },
+	"signed":     analysis.Signed,
+	"num":        analysis.Num,
+	"role":       analysis.RoleName,
+	"champ":      champName,
+	"champImg":   champImg,
+	"itemImg":    itemImg,
+	"runeImg":    runeImg,
+	"runeName":   runeName,
+	"spellImg":   spellImg,
+	"spellName":  spellName,
+	"splashImg":  splashImg,
+	"rankCrest":  rankCrest,
+	"rankEmblem": rankEmblem,
+	"rankLabel":  rankLabel,
+	"roleKey":    roleKey,
+	"roleLabel":  roleLabel,
+	"dict":       dict,
+	"opggRunes":  opggRunes,
+	"recordPct": func(wins, losses int) float64 {
+		if wins+losses == 0 {
+			return math.NaN()
+		}
+		return float64(wins) / float64(wins+losses)
+	},
+	"queue":   queueName,
+	"kda":     kda,
+	"dur":     duration,
+	"date":    func(t time.Time) string { return t.Format("Jan 2, 2006") },
+	"ago":     ago,
+	"wrClass": wrClass,
 	"diffClass": func(x float64) string {
 		switch {
 		case math.IsNaN(x) || x == 0:
@@ -85,6 +103,7 @@ var funcs = template.FuncMap{
 		return fmt.Sprintf("%.1f%%", 100*float64(v)/float64(max))
 	},
 	"add":  func(a, b int) int { return a + b },
+	"sub":  func(a, b int) int { return a - b },
 	"q":    url.QueryEscape,
 	"path": func(s string) string { return url.PathEscape(s) },
 	"initials": func(name string) string {
@@ -100,6 +119,23 @@ var funcs = template.FuncMap{
 		}
 		return fmt.Sprintf("%.1f%%", 100*math.Max(0, math.Min(1, x)))
 	},
+}
+
+// dict builds a map from key, value pairs so a template can pass more
+// than one value to another: {{template "x" (dict "A" 1 "B" 2)}}.
+func dict(kv ...any) (map[string]any, error) {
+	if len(kv)%2 != 0 {
+		return nil, errors.New("dict needs key, value pairs")
+	}
+	m := make(map[string]any, len(kv)/2)
+	for i := 0; i < len(kv); i += 2 {
+		k, ok := kv[i].(string)
+		if !ok {
+			return nil, fmt.Errorf("dict key %v is not a string", kv[i])
+		}
+		m[k] = kv[i+1]
+	}
+	return m, nil
 }
 
 // displayNames covers champions whose Data Dragon id isn't their name.

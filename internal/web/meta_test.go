@@ -47,6 +47,9 @@ func newFakeMeta() *fakeMeta {
 				Play: 305981, WinRate: 0.51, PickRate: 0.12, BanRate: 0.04, Tier: 1, Rank: 3, DamageType: "AP",
 				Good: []meta.Counter{{Name: "Zed", Key: "Zed", Play: 5020, Win: 2791}},
 				Bad:  []meta.Counter{{Name: "Katarina", Key: "Katarina", Play: 7187, Win: 3481}},
+				// From testdata/analysis_ahri_mid.txt: Electrocute, Sorcery secondary.
+				Runes: meta.RunePage{PrimaryStyle: 8100, Primary: []int{8112, 8139, 8140, 8106},
+					SubStyle: 8200, Sub: []int{8210, 8226}, StatMods: []int{5005, 5008, 5001}, Play: 137279, Win: 69644, PickRate: 0.48},
 			},
 		},
 	}
@@ -127,7 +130,9 @@ func TestChampionsMeta(t *testing.T) {
 		`title="OP.GG Mid, rank 40"`)
 
 	_, body = get(t, ts, "/champions/Ahri")
-	expect(t, body, "OP.GG Mid", "patch 16.22", "Does best into", "Struggles against", "Katarina", "55.6%", "AP")
+	expect(t, body, `<use href="#r-mid"/></svg>Mid</span>`, "patch 16.22",
+		"Most played runes", "Electrocute", "perk-images/Styles/Domination/Electrocute/Electrocute.png",
+		"StatModsAttackSpeedIcon.png", "50.7% win rate", "Does best into", "Struggles against", "Katarina", "55.6%", "AP")
 	// My record into Zed shows next to OP.GG's row: the fixtures have Ahri
 	// against Zed 5 times, all wins.
 	if i := strings.Index(body, "Does best into"); i < 0 || !strings.Contains(body[i:], "5-0") {

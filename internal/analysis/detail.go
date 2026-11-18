@@ -22,6 +22,41 @@ type PlayerLine struct {
 	Vision        int    `json:"vision"`
 	// Items are item0..item6; 0 is an empty slot and the last is the trinket.
 	Items [7]int `json:"items"`
+	// Spells are the two summoner spell ids (0 if unknown).
+	Spells [2]int `json:"spells"`
+	Runes  Runes  `json:"runes"`
+}
+
+// Runes is a rune page as ids. Zero values mean unknown.
+type Runes struct {
+	PrimaryStyle int    `json:"primaryStyle"`
+	Primary      [4]int `json:"primary"` // keystone first
+	SubStyle     int    `json:"subStyle"`
+	Sub          [2]int `json:"sub"`
+	Shards       [3]int `json:"shards"` // offense, flex, defense
+}
+
+// Keystone is the page's first primary rune.
+func (r Runes) Keystone() int { return r.Primary[0] }
+
+// RunesOf reads a participant's rune page.
+func RunesOf(p *riot.Participant) Runes {
+	r := Runes{Shards: [3]int{p.Perks.StatPerks.Offense, p.Perks.StatPerks.Flex, p.Perks.StatPerks.Defense}}
+	for i, st := range p.Perks.Styles {
+		switch {
+		case st.Description == "primaryStyle" || (st.Description == "" && i == 0):
+			r.PrimaryStyle = st.Style
+			for j := 0; j < len(st.Selections) && j < len(r.Primary); j++ {
+				r.Primary[j] = st.Selections[j].Perk
+			}
+		case st.Description == "subStyle" || (st.Description == "" && i == 1):
+			r.SubStyle = st.Style
+			for j := 0; j < len(st.Selections) && j < len(r.Sub); j++ {
+				r.Sub[j] = st.Selections[j].Perk
+			}
+		}
+	}
+	return r
 }
 
 // LanePoint is my and my lane opponent's totals at one timeline frame.
@@ -71,6 +106,8 @@ func ExtractDetail(m *riot.Match, tl *riot.Timeline, puuid string) (d Detail, ok
 			Damage:        p.TotalDamageDealtToChampions,
 			Vision:        p.VisionScore,
 			Items:         p.Items(),
+			Spells:        [2]int{p.Summoner1ID, p.Summoner2ID},
+			Runes:         RunesOf(p),
 		})
 	}
 	if tl == nil {

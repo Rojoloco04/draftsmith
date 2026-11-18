@@ -113,10 +113,13 @@ func TestOverview(t *testing.T) {
 		t.Fatalf("status %d\n%s", code, body)
 	}
 	expect(t, body,
-		"Tester#NA1", "EMERALD III", "12 LP", "Rank history", // LP chart
+		"Tester#NA1", "Emerald III", "12 LP", "Rank history", // LP chart
 		"Rolling win rate", "Top champions", "Wukong", // display name for MonkeyKing
-		"What stands out", `aria-current="page">Overview`, "Last sync 5 minutes ago",
+		"What stands out", `data-nav="overview" aria-current="page"`, "Last sync 5 minutes ago",
 		`class="streak"`, "Gold lead at 15",
+		"ranked-emblem/emblem-emerald.png", "ranked-mini-crests/emerald.svg", // rank icons
+		`href="#r-mid"`,         // role glyph
+		"/img/champion/splash/", // hero art
 	)
 	// Solo queue only by default: 28 synthetic solo games + the real one.
 	if !strings.Contains(body, "<strong>29</strong>") {
@@ -168,6 +171,9 @@ func TestMatchDetail(t *testing.T) {
 		"Gold vs lane opponent", "Where I died", `class="death"`,
 		"-788", // gold diff at 15, pinned by analysis.TestExtractRealGame
 		"/img/item/", "16.22.1",
+		// My spells and rune page: Ghost + Flash, Stormraider's Surge (Sorcery) with Precision.
+		"/img/spell/SummonerHaste.png", "/img/spell/SummonerFlash.png", "StormraidersSurgeRuneIcon2.png",
+		"perk-images/Styles/7201_Precision.png", "StatModsCDRScalingIcon.png",
 	)
 	if n := strings.Count(body, "<tr class=\"me\">"); n != 1 {
 		t.Errorf("%d rows marked as me", n)

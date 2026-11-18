@@ -128,6 +128,12 @@ func TestMatchDetail(t *testing.T) {
 			if p.Champion != "Vladimir" || p.Position != "MIDDLE" {
 				t.Errorf("me = %+v", p)
 			}
+			// Ghost + Flash; Stormraider's Surge (Sorcery) with Precision secondary.
+			wantRunes := analysis.Runes{PrimaryStyle: 8200, Primary: [4]int{8230, 8275, 8210, 8236},
+				SubStyle: 8000, Sub: [2]int{9105, 8017}, Shards: [3]int{5007, 5008, 5001}}
+			if p.Spells != [2]int{6, 4} || p.Runes != wantRunes {
+				t.Errorf("spells %v runes %+v", p.Spells, p.Runes)
+			}
 		}
 	}
 	if me != 1 {

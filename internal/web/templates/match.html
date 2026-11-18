@@ -1,17 +1,23 @@
 {{define "content"}}
 {{with .Game}}
-<section class="card mhead {{if .Remake}}remake{{else if .Win}}win{{else}}loss{{end}}">
-  <span class="icon xl" data-initials="{{initials .Champion}}"><img src="{{champImg .Champion .Patch}}" alt="" width="72" height="72"></span>
-  <div class="mhead-main">
-    <h1>{{champ .Champion}} <span class="muted">{{role .Role}}</span></h1>
-    <p><strong class="result">{{if .Remake}}Remake{{else if .Win}}Victory{{else}}Defeat{{end}}</strong>
-      · {{queue .Queue}} · {{dur .Minutes}} · {{.Start.Format "Mon Jan 2 2006, 15:04"}} · patch {{.Patch}}</p>
-    {{if .Opponent}}<p>Lane opponent: <strong>{{champ .Opponent}}</strong></p>{{end}}
-  </div>
-  <div class="mhead-kda">
-    <strong>{{.Kills}} / <span class="neg">{{.Deaths}}</span> / {{.Assists}}</strong>
-    <span>{{kda .Kills .Deaths .Assists}} KDA · KP {{pct .KillParticipation}}</span>
-    <span>{{.CS}} CS ({{num .CSPerMin 1}}/m) · {{pct .DamageShare}} of team damage</span>
+<section class="hero mhero {{if .Remake}}remake{{else if .Win}}win{{else}}loss{{end}}">
+  <img class="splash" src="{{splashImg .Champion}}" alt="">
+  <div class="hero-body">
+    <span class="cicon">
+      <span class="icon xl" data-initials="{{initials .Champion}}"><img src="{{champImg .Champion .Patch}}" alt="" width="72" height="72"></span>
+      {{if $.Me.Level}}<b class="lvl">{{$.Me.Level}}</b>{{end}}
+    </span>
+    <div class="mhead-main">
+      <span class="result">{{if .Remake}}Remake{{else if .Win}}Victory{{else}}Defeat{{end}}</span>
+      <h1>{{champ .Champion}} <span class="muted role-line">{{template "role" .Role}}{{role .Role}}</span></h1>
+      <p class="muted">{{queue .Queue}} · {{dur .Minutes}} · {{.Start.Format "Mon Jan 2 2006, 15:04"}} · patch {{.Patch}}</p>
+      {{if .Opponent}}<p class="vs">vs <span class="icon" data-initials="{{initials .Opponent}}"><img src="{{champImg .Opponent .Patch}}" alt="" width="28" height="28"></span><strong>{{champ .Opponent}}</strong>{{with $.Opp}} <span class="muted">lvl {{.Level}}</span>{{end}}</p>{{end}}
+    </div>
+    <div class="mhead-kda">
+      <strong>{{.Kills}} <i>/</i> <span class="neg">{{.Deaths}}</span> <i>/</i> {{.Assists}}</strong>
+      <span>{{kda .Kills .Deaths .Assists}} KDA · KP {{pct .KillParticipation}}</span>
+      <span class="muted">{{.CS}} CS ({{num .CSPerMin 1}}/m) · {{pct .DamageShare}} of team damage</span>
+    </div>
   </div>
 </section>
 
@@ -25,23 +31,53 @@
 </div>
 {{end}}
 
+<div class="grid two">
+  <section class="card">
+    <h2>Runes and spells</h2>
+    {{if .Me.Runes.PrimaryStyle}}
+      {{template "runePage" .Me.Runes}}
+      <div class="spell-row"><span class="label">Spells</span>{{range .Me.Spells}}{{template "spell" (dict "ID" . "Patch" $.Game.Patch)}}<span>{{spellName .}}</span>{{end}}</div>
+    {{else}}
+      <p class="muted">No rune page recorded for this game.</p>
+    {{end}}
+  </section>
+
+  {{if and .DeathMap .Game.DeathSpots}}
+  <section class="card deaths">
+    <div>
+      <h2>Where I died</h2>
+      <p class="muted">{{len .Game.DeathSpots}} death{{if ne (len .Game.DeathSpots) 1}}s{{end}}. Blue base is bottom left; the diagonal is the river. Hover a dot for the time.</p>
+    </div>
+    {{.DeathMap}}
+  </section>
+  {{else}}
+  <section class="card">
+    <h2>Where I died</h2>
+    {{if .Game.HasTimeline}}<p class="muted">No deaths this game.</p>
+    {{else}}<p class="muted">No timeline for this game (Riot keeps them about a year), so there are no lane curves or death positions.</p>{{end}}
+  </section>
+  {{end}}
+</div>
+
 {{range .Teams}}
 <section class="card team {{.Side}}">
-  <h2>{{if .Mine}}My team{{else}}Enemy team{{end}} <span class="muted">· {{.Name}} · {{if .Win}}<span class="pos">Victory</span>{{else}}<span class="neg">Defeat</span>{{end}} · {{.Kills}} kills · {{thousands .Gold}} gold</span></h2>
+  <h2><span class="side-dot"></span>{{if .Mine}}My team{{else}}Enemy team{{end}} <span class="muted">· {{.Name}} · {{if .Win}}<span class="pos">Victory</span>{{else}}<span class="neg">Defeat</span>{{end}} · {{.Kills}} kills · {{thousands .Gold}} gold</span></h2>
   <div class="scroll">
   <table class="tbl players">
     <thead><tr><th>Champion</th><th class="r">KDA</th><th class="r">CS</th><th class="r">Gold</th><th>Damage</th><th class="r">Vision</th><th>Items</th></tr></thead>
     <tbody>
     {{range .Players}}
       <tr {{if .Me}}class="me"{{end}}>
-        <td><span class="champ"><span class="icon" data-initials="{{initials .Champion}}"><img src="{{champImg .Champion $.Game.Patch}}" alt="" loading="lazy" width="32" height="32"></span>
-          <span><strong>{{champ .Champion}}</strong>{{if .Me}} <span class="pill">me</span>{{end}}<br><span class="muted">{{role .Position}} · lvl {{.Level}}</span></span></span></td>
-        <td class="r nowrap">{{.Kills}}/{{.Deaths}}/{{.Assists}}<br><span class="muted">{{kda .Kills .Deaths .Assists}}</span></td>
+        <td><span class="champ">
+          <span class="cicon"><span class="icon" data-initials="{{initials .Champion}}"><img src="{{champImg .Champion $.Game.Patch}}" alt="" loading="lazy" width="36" height="36"></span><b class="lvl">{{.Level}}</b></span>
+          {{template "loadout" (dict "Line" . "Patch" $.Game.Patch)}}
+          <span class="pname"><strong>{{champ .Champion}}</strong>{{if .Me}} <span class="pill">me</span>{{end}}<br><span class="muted role-line">{{template "role" .Position}}{{role .Position}}</span></span></span></td>
+        <td class="r nowrap">{{.Kills}}/<span class="neg">{{.Deaths}}</span>/{{.Assists}}<br><span class="muted">{{kda .Kills .Deaths .Assists}}</span></td>
         <td class="r">{{.CS}}</td>
         <td class="r">{{thousands .Gold}}</td>
         <td class="dmg"><span class="bar"><span style="width: {{widthPct .Damage $.MaxDamage}}"></span></span><span class="muted">{{thousands .Damage}}</span></td>
         <td class="r">{{.Vision}}</td>
-        <td class="items nowrap">{{range .Items}}{{if .}}<img src="{{itemImg . $.Game.Patch}}" alt="item {{.}}" title="item {{.}}" loading="lazy" width="24" height="24">{{else}}<span class="slot"></span>{{end}}{{end}}</td>
+        <td class="items nowrap">{{range $i, $it := .Items}}{{if $it}}<img src="{{itemImg $it $.Game.Patch}}" alt="item {{$it}}" title="item {{$it}}" loading="lazy" width="24" height="24"{{if eq $i 6}} class="trinket"{{end}}>{{else}}<span class="slot"></span>{{end}}{{end}}</td>
       </tr>
     {{end}}
     </tbody>
@@ -65,19 +101,5 @@
 </div>
 {{end}}
 
-{{if and .DeathMap .Game.DeathSpots}}
-<section class="card deaths">
-  <div>
-    <h2>Where I died</h2>
-    <p class="muted">{{len .Game.DeathSpots}} death{{if ne (len .Game.DeathSpots) 1}}s{{end}}. Blue base is bottom left; the diagonal is the river. Hover a dot for the time.</p>
-  </div>
-  {{.DeathMap}}
-</section>
-{{else if .Game.HasTimeline}}
-<p class="note">No deaths this game.</p>
-{{else}}
-<p class="note">No timeline for this game (Riot keeps them about a year), so there are no lane curves or death positions.</p>
-{{end}}
-
-<p><a href="/matches">← All matches</a></p>
+<p><a class="back" href="/matches">← All matches</a></p>
 {{end}}

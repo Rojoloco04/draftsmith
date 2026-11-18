@@ -48,7 +48,7 @@ Background sync checks for new games every 25 minutes. To pick up a game you jus
 
 OP.GG data (Emerald+, current patch) shows up in three places: the tier list page, with your own record next to each champion; a "your pool vs the meta" card and a meta tier column on the champions page; and an OP.GG card on each champion page with its tier, rates, and best and worst matchups, next to your record against those champions. Responses are cached in `data/draftsmith.db` and refreshed daily. If OP.GG is unreachable, the last copy is shown with its age.
 
-The dashboard has no login, so it only listens where you tell it to and refuses `0.0.0.0`. Keep it on localhost or Tailscale; don't port forward it. Other players appear as champion and position only. Champion and item icons load from Riot's Data Dragon CDN.
+The dashboard has no login, so it only listens where you tell it to and refuses `0.0.0.0`. Keep it on localhost or Tailscale; don't port forward it. Other players appear as champion and position only. Champion, item, rune and summoner spell icons and splash art load from Riot's Data Dragon CDN, and ranked emblems from CommunityDragon (`raw.communitydragon.org`); those URLs carry only ids and tier names. Rune and spell names are embedded from Data Dragon (`internal/web/ddragon`).
 
 `data/draftsmith.db` is a SQLite index built from the raw archive. `sync` and `serve` keep it current, and it's safe to delete: `reindex` (or the next `serve`) rebuilds it.
 

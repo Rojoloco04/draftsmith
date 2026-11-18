@@ -19,7 +19,7 @@ import (
 // SchemaVersion is stored in PRAGMA user_version. Bump it whenever the
 // schema or the derived values change; Open then drops and recreates every
 // table and the next Index rebuilds them from the archive.
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 // FileName is the database file inside the data directory.
 const FileName = "draftsmith.db"
@@ -100,6 +100,9 @@ CREATE TABLE participants (
 	damage         INTEGER NOT NULL,
 	vision         INTEGER NOT NULL,
 	items          TEXT NOT NULL, -- item0..item6, comma separated
+	spells         TEXT NOT NULL, -- summoner1Id,summoner2Id
+	-- primary style, 4 primary runes, sub style, 2 sub runes, 3 shards
+	runes          TEXT NOT NULL,
 	PRIMARY KEY (match_id, participant_id)
 );
 
