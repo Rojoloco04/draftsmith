@@ -1,0 +1,43 @@
+{{define "content"}}
+<div class="pagehead">
+  <h1>Match history</h1>
+  {{template "queueSwitch" .Base}}
+</div>
+
+<form class="filters" action="/matches" method="get"
+      hx-get="/matches" hx-target="#results" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change">
+  <input type="hidden" name="queue" value="{{.Queue.Key}}">
+  <label>Role
+    <select name="role">
+      <option value="">All roles</option>
+      {{range .Roles}}<option value="{{.}}" {{if eq . $.Role}}selected{{end}}>{{role .}}</option>{{end}}
+    </select>
+  </label>
+  <label>Champion
+    <select name="champion">
+      <option value="">All champions</option>
+      {{range .Champions}}<option value="{{.}}" {{if eq . $.Champion}}selected{{end}}>{{champ .}}</option>{{end}}
+    </select>
+  </label>
+  <noscript><button type="submit">Filter</button></noscript>
+</form>
+
+{{template "results" .}}
+{{end}}
+
+{{define "results"}}
+<div id="results">
+  <p class="muted count">{{.Total}} game{{if ne .Total 1}}s{{end}}{{if gt .Pages 1}} · page {{.Page}} of {{.Pages}}{{end}}</p>
+  {{if .Games}}
+    <div class="mlist">{{range .Games}}{{template "matchRow" .}}{{end}}</div>
+  {{else}}
+    <p class="card empty">No games match these filters.</p>
+  {{end}}
+  {{if gt .Pages 1}}
+  <nav class="pager" hx-target="#results" hx-swap="outerHTML" hx-push-url="true">
+    {{if .PrevQuery}}<a href="/matches?{{.PrevQuery}}" hx-get="/matches?{{.PrevQuery}}">← Newer</a>{{else}}<span></span>{{end}}
+    {{if .NextQuery}}<a href="/matches?{{.NextQuery}}" hx-get="/matches?{{.NextQuery}}">Older →</a>{{end}}
+  </nav>
+  {{end}}
+</div>
+{{end}}

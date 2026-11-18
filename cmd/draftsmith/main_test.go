@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rojoloco04/draftsmith/internal/db"
 	"github.com/rojoloco04/draftsmith/internal/fixture"
 )
 
@@ -82,8 +83,48 @@ func TestSyncReportExport(t *testing.T) {
 		t.Fatalf("export has %d lines", lines)
 	}
 
+	// Sync also built the dashboard index.
+	d, err := db.OpenDir(context.Background(), data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	games, err := d.Games(context.Background(), db.GameFilter{})
+	d.Close()
+	if err != nil || len(games) != n {
+		t.Fatalf("index has %d games (err %v), want %d", len(games), err, n)
+	}
+
 	// Second sync is a no-op.
 	if err := cmdSync(context.Background(), []string{"--data", data, "--rate", "1000/1s"}); err != nil {
 		t.Fatal(err)
+	}
+
+	os.Remove(filepath.Join(data, db.FileName))
+	if err := cmdReindex(context.Background(), []string{"--data", data}); err != nil {
+		t.Fatal(err)
+	}
+	d, _ = db.OpenDir(context.Background(), data)
+	defer d.Close()
+	hist, _ := d.RankHistory(context.Background(), "RANKED_SOLO_5x5")
+	games, _ = d.Games(context.Background(), db.GameFilter{})
+	if len(games) != n || len(hist) != 1 || hist[0].LP != 45 {
+		t.Fatalf("after reindex: %d games, rank history %+v", len(games), hist)
+	}
+}
+
+func TestCheckListenAddr(t *testing.T) {
+	for addr, ok := range map[string]bool{
+		"127.0.0.1:8080":     true,
+		"100.101.102.103:80": true,
+		"localhost:8080":     true,
+		"[::1]:8080":         true,
+		":8080":              false,
+		"0.0.0.0:8080":       false,
+		"[::]:8080":          false,
+		"nonsense":           false,
+	} {
+		if err := checkListenAddr(addr); (err == nil) != ok {
+			t.Errorf("%s: err = %v", addr, err)
+		}
 	}
 }

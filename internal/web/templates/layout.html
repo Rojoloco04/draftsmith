@@ -1,0 +1,38 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · Draftsmith</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<script src="/static/htmx.min.js" defer></script>
+<script src="/static/app.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-inner">
+    <a class="brand" href="/?queue={{.Queue.Key}}">Draftsmith</a>
+    <nav class="nav">
+      <a href="/?queue={{.Queue.Key}}" {{if eq .Nav "overview"}}aria-current="page"{{end}}>Overview</a>
+      <a href="/matches?queue={{.Queue.Key}}" {{if eq .Nav "matches"}}aria-current="page"{{end}}>Matches</a>
+      <a href="/champions?queue={{.Queue.Key}}" {{if eq .Nav "champions"}}aria-current="page"{{end}}>Champions</a>
+      <a href="/tier-list" class="soon" {{if eq .Nav "tier-list"}}aria-current="page"{{end}}>Tier list</a>
+      <a href="/champ-select" class="soon" {{if eq .Nav "champ-select"}}aria-current="page"{{end}}>Champ select</a>
+    </nav>
+    <span class="who">{{.RiotID}}</span>
+  </div>
+</header>
+<main class="wrap">
+{{template "content" .}}
+</main>
+<footer class="wrap foot">
+  {{with .Status}}
+    {{if .Syncing}}<span class="pill live">Syncing…</span>{{end}}
+    {{if .SyncDisabled}}Background sync off: {{.SyncDisabled}}.{{else}}Last sync {{ago .LastSync}}.{{end}}
+    {{if .LastError}}<span class="neg">Last sync failed: {{.LastError}}</span>{{end}}
+  {{end}}
+  Data from the Riot API. Draftsmith isn't endorsed by Riot Games.
+</footer>
+</body>
+</html>{{end}}

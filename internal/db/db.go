@@ -25,7 +25,8 @@ const SchemaVersion = 1
 const FileName = "draftsmith.db"
 
 type DB struct {
-	sql *sql.DB
+	sql  *sql.DB
+	path string
 	// Rebuilt is true if Open created the schema from scratch, either
 	// because the file was new or because the schema version changed.
 	Rebuilt bool
@@ -152,7 +153,7 @@ func Open(ctx context.Context, path string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	d := &DB{sql: s}
+	d := &DB{sql: s, path: path}
 	if err := d.migrate(ctx); err != nil {
 		s.Close()
 		return nil, fmt.Errorf("opening %s: %w", path, err)
@@ -161,6 +162,9 @@ func Open(ctx context.Context, path string) (*DB, error) {
 }
 
 func (d *DB) Close() error { return d.sql.Close() }
+
+// Path is the database file.
+func (d *DB) Path() string { return d.path }
 
 func (d *DB) migrate(ctx context.Context) error {
 	var v int

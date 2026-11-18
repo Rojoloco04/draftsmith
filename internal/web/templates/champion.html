@@ -1,0 +1,51 @@
+{{define "content"}}
+<div class="pagehead">
+  <h1 class="champ"><span class="icon xl" data-initials="{{initials .Name}}"><img src="{{champImg .Name .Patch}}" alt="" width="56" height="56"></span>{{champ .Name}}</h1>
+  {{template "queueSwitch" .Base}}
+</div>
+
+{{template "tiles" .Stats.Stats}}
+
+<div class="grid two">
+  <section class="card">
+    <h2>Record</h2>
+    <p>Adjusted win rate <strong class="{{if ge .Stats.Games 5}}{{wrClass .Stats.Adjusted}}{{end}}">{{pct .Stats.Adjusted}}</strong>
+      <span class="muted">(raw {{pct .Stats.WinRate}} over {{.Stats.Games}} game{{if ne .Stats.Games 1}}s{{end}}; your overall {{pct .Overall}})</span></p>
+    {{if gt (len .Roles) 1}}
+    <table class="tbl">
+      <thead><tr><th>Role</th><th class="r">Games</th><th class="r">Win rate</th></tr></thead>
+      <tbody>{{range .Roles}}<tr><td>{{.Key}}</td><td class="r">{{.Games}}</td><td class="r {{wrClass .WinRate}}">{{pct .WinRate}}</td></tr>{{end}}</tbody>
+    </table>
+    {{end}}
+    {{if .WRChart}}<div class="legend"><span class="key s1"></span>Last 20 <span class="key s2"></span>Last 10</div>{{.WRChart}}{{end}}
+  </section>
+
+  <section class="card">
+    <h2>Matchups</h2>
+    {{if .Matchups}}
+    <table class="tbl">
+      <thead><tr><th>Lane opponent</th><th class="r">Games</th><th class="r">Win rate</th><th class="r">CS @10</th><th class="r">Gold @15</th></tr></thead>
+      <tbody>
+      {{range .Matchups}}
+        <tr>
+          <td><span class="champ"><span class="icon" data-initials="{{initials .Key}}"><img src="{{champImg .Key $.Patch}}" alt="" loading="lazy" width="28" height="28"></span>{{champ .Key}}</span></td>
+          <td class="r"><strong>{{.Games}}</strong> <span class="muted">{{.Wins}}-{{.Losses}}</span></td>
+          <td class="r {{if ge .Games 3}}{{wrClass .WinRate}}{{end}}">{{pct .WinRate}}</td>
+          <td class="r {{diffClass .CSDiff10}}">{{signed .CSDiff10 1}}</td>
+          <td class="r {{diffClass .GoldDiff15}}">{{signed .GoldDiff15 0}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    <p class="note">Most faced first. With one or two games a matchup says very little.</p>
+    {{else}}
+    <p class="muted">No lane opponents recorded.</p>
+    {{end}}
+  </section>
+</div>
+
+<section>
+  <h2>Games</h2>
+  <div class="mlist">{{range .Games}}{{template "matchRow" .}}{{end}}</div>
+</section>
+{{end}}

@@ -1,0 +1,53 @@
+{{/* Shared fragments. */}}
+
+{{define "queueSwitch"}}
+<div class="seg" role="group" aria-label="Queue">
+  {{$cur := .Queue.Key}}{{$path := .Path}}
+  {{range .Queues}}<a href="{{$path}}?queue={{.Key}}" {{if eq .Key $cur}}aria-current="true"{{end}}>{{.Label}}</a>{{end}}
+</div>
+{{end}}
+
+{{define "matchRow"}}
+<a class="mrow {{if .Remake}}remake{{else if .Win}}win{{else}}loss{{end}}" href="/matches/{{path .MatchID}}">
+  <div class="m-result">
+    <strong>{{if .Remake}}Remake{{else if .Win}}Victory{{else}}Defeat{{end}}</strong>
+    <span>{{queue .Queue}}</span>
+    <span>{{dur .Minutes}}</span>
+    <span class="muted" title="{{.Start.Format "Mon Jan 2 2006 15:04"}}">{{ago .Start}}</span>
+  </div>
+  <div class="m-champ">
+    <span class="icon lg" data-initials="{{initials .Champion}}"><img src="{{champImg .Champion .Patch}}" alt="" loading="lazy" width="48" height="48"></span>
+    <div><strong>{{champ .Champion}}</strong><span class="muted">{{role .Role}}</span></div>
+  </div>
+  <div class="m-kda">
+    <strong>{{.Kills}} / <span class="neg">{{.Deaths}}</span> / {{.Assists}}</strong>
+    <span>{{kda .Kills .Deaths .Assists}} KDA</span>
+  </div>
+  <div class="m-stats">
+    <span>{{.CS}} CS ({{num .CSPerMin 1}})</span>
+    <span>KP {{pct .KillParticipation}}</span>
+    <span>Vision {{num .VisionPerMin 2}}/m</span>
+  </div>
+  <div class="m-lane">
+    <span class="label">Gold @15</span>
+    <strong class="{{laneClass .At15 "gold"}}">{{diffInt .At15 "gold"}}</strong>
+    <span class="label">CS @10 <b class="{{laneClass .At10 "cs"}}">{{diffInt .At10 "cs"}}</b></span>
+  </div>
+  <div class="m-opp">
+    {{if .Opponent}}<span class="muted">vs</span>
+    <span class="icon" data-initials="{{initials .Opponent}}"><img src="{{champImg .Opponent .Patch}}" alt="" loading="lazy" width="28" height="28"></span>
+    <span>{{champ .Opponent}}</span>{{end}}
+  </div>
+</a>
+{{end}}
+
+{{define "tiles"}}
+<div class="tiles">
+  <div class="tile"><span class="label">Games</span><strong>{{.Games}}</strong><span class="muted">{{.Wins}}W {{.Losses}}L</span></div>
+  <div class="tile"><span class="label">Win rate</span><strong class="{{if ge .Games 5}}{{wrClass .WinRate}}{{end}}">{{pct .WinRate}}</strong></div>
+  <div class="tile"><span class="label">KDA</span><strong>{{num .KDA 2}}</strong><span class="muted">{{num .AvgKills 1}} / {{num .AvgDeaths 1}} / {{num .AvgAssists 1}}</span></div>
+  <div class="tile"><span class="label">CS/min</span><strong>{{num .CSPerMin 1}}</strong></div>
+  <div class="tile"><span class="label">Kill part.</span><strong>{{pct .KillPart}}</strong></div>
+  <div class="tile"><span class="label">Gold diff @15</span><strong class="{{diffClass .GoldDiff15}}">{{signed .GoldDiff15 0}}</strong><span class="muted">CS @10 {{signed .CSDiff10 1}}</span></div>
+</div>
+{{end}}

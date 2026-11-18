@@ -1,0 +1,83 @@
+{{define "content"}}
+{{with .Game}}
+<section class="card mhead {{if .Remake}}remake{{else if .Win}}win{{else}}loss{{end}}">
+  <span class="icon xl" data-initials="{{initials .Champion}}"><img src="{{champImg .Champion .Patch}}" alt="" width="72" height="72"></span>
+  <div class="mhead-main">
+    <h1>{{champ .Champion}} <span class="muted">{{role .Role}}</span></h1>
+    <p><strong class="result">{{if .Remake}}Remake{{else if .Win}}Victory{{else}}Defeat{{end}}</strong>
+      · {{queue .Queue}} · {{dur .Minutes}} · {{.Start.Format "Mon Jan 2 2006, 15:04"}} · patch {{.Patch}}</p>
+    {{if .Opponent}}<p>Lane opponent: <strong>{{champ .Opponent}}</strong></p>{{end}}
+  </div>
+  <div class="mhead-kda">
+    <strong>{{.Kills}} / <span class="neg">{{.Deaths}}</span> / {{.Assists}}</strong>
+    <span>{{kda .Kills .Deaths .Assists}} KDA · KP {{pct .KillParticipation}}</span>
+    <span>{{.CS}} CS ({{num .CSPerMin 1}}/m) · {{pct .DamageShare}} of team damage</span>
+  </div>
+</section>
+
+<div class="tiles">
+  <div class="tile"><span class="label">Gold diff @10</span><strong class="{{laneClass .At10 "gold"}}">{{diffInt .At10 "gold"}}</strong></div>
+  <div class="tile"><span class="label">CS diff @10</span><strong class="{{laneClass .At10 "cs"}}">{{diffInt .At10 "cs"}}</strong></div>
+  <div class="tile"><span class="label">Gold diff @15</span><strong class="{{laneClass .At15 "gold"}}">{{diffInt .At15 "gold"}}</strong></div>
+  <div class="tile"><span class="label">CS diff @15</span><strong class="{{laneClass .At15 "cs"}}">{{diffInt .At15 "cs"}}</strong></div>
+  <div class="tile"><span class="label">XP diff @15</span><strong class="{{laneClass .At15 "xp"}}">{{diffInt .At15 "xp"}}</strong></div>
+  <div class="tile"><span class="label">Deaths before 15</span><strong>{{if .HasTimeline}}{{.DeathsBefore15}}{{else}}-{{end}}</strong><span class="muted">{{if .HasTimeline}}{{.DeathsEnemySide}} on the enemy half{{end}}</span></div>
+</div>
+{{end}}
+
+{{range .Teams}}
+<section class="card team {{.Side}}">
+  <h2>{{if .Mine}}My team{{else}}Enemy team{{end}} <span class="muted">· {{.Name}} · {{if .Win}}<span class="pos">Victory</span>{{else}}<span class="neg">Defeat</span>{{end}} · {{.Kills}} kills · {{thousands .Gold}} gold</span></h2>
+  <div class="scroll">
+  <table class="tbl players">
+    <thead><tr><th>Champion</th><th class="r">KDA</th><th class="r">CS</th><th class="r">Gold</th><th>Damage</th><th class="r">Vision</th><th>Items</th></tr></thead>
+    <tbody>
+    {{range .Players}}
+      <tr {{if .Me}}class="me"{{end}}>
+        <td><span class="champ"><span class="icon" data-initials="{{initials .Champion}}"><img src="{{champImg .Champion $.Game.Patch}}" alt="" loading="lazy" width="32" height="32"></span>
+          <span><strong>{{champ .Champion}}</strong>{{if .Me}} <span class="pill">me</span>{{end}}<br><span class="muted">{{role .Position}} · lvl {{.Level}}</span></span></span></td>
+        <td class="r nowrap">{{.Kills}}/{{.Deaths}}/{{.Assists}}<br><span class="muted">{{kda .Kills .Deaths .Assists}}</span></td>
+        <td class="r">{{.CS}}</td>
+        <td class="r">{{thousands .Gold}}</td>
+        <td class="dmg"><span class="bar"><span style="width: {{widthPct .Damage $.MaxDamage}}"></span></span><span class="muted">{{thousands .Damage}}</span></td>
+        <td class="r">{{.Vision}}</td>
+        <td class="items nowrap">{{range .Items}}{{if .}}<img src="{{itemImg . $.Game.Patch}}" alt="item {{.}}" title="item {{.}}" loading="lazy" width="24" height="24">{{else}}<span class="slot"></span>{{end}}{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</section>
+{{end}}
+
+{{if .GoldChart}}
+<div class="grid two">
+  <section class="card">
+    <h2>Gold vs lane opponent</h2>
+    <div class="legend"><span class="key s1"></span>{{champ .Game.Champion}} <span class="key s3"></span>{{champ .Game.Opponent}}</div>
+    {{.GoldChart}}
+  </section>
+  <section class="card">
+    <h2>CS vs lane opponent</h2>
+    <div class="legend"><span class="key s1"></span>{{champ .Game.Champion}} <span class="key s3"></span>{{champ .Game.Opponent}}</div>
+    {{.CSChart}}
+  </section>
+</div>
+{{end}}
+
+{{if and .DeathMap .Game.DeathSpots}}
+<section class="card deaths">
+  <div>
+    <h2>Where I died</h2>
+    <p class="muted">{{len .Game.DeathSpots}} death{{if ne (len .Game.DeathSpots) 1}}s{{end}}. Blue base is bottom left; the diagonal is the river. Hover a dot for the time.</p>
+  </div>
+  {{.DeathMap}}
+</section>
+{{else if .Game.HasTimeline}}
+<p class="note">No deaths this game.</p>
+{{else}}
+<p class="note">No timeline for this game (Riot keeps them about a year), so there are no lane curves or death positions.</p>
+{{end}}
+
+<p><a href="/matches">← All matches</a></p>
+{{end}}

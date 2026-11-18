@@ -1,0 +1,99 @@
+{{define "content"}}
+<div class="pagehead">
+  <h1>Overview</h1>
+  {{template "queueSwitch" .Base}}
+</div>
+
+{{if not .Sum.Games}}
+<section class="card empty">
+  <h2>No games yet</h2>
+  <p>Nothing is indexed for {{.Queue.Label}}. Run <code>draftsmith sync</code>, or wait for the background sync.</p>
+</section>
+{{else}}
+<div class="grid two">
+  <section class="card rank">
+    <h2>Rank</h2>
+    {{with .Rank}}
+      <div class="rank-now">
+        <strong>{{.Tier}} {{.Division}}</strong>
+        <span>{{.LP}} LP</span>
+        <span class="muted">{{.Wins}}W {{.Losses}}L this split · as of {{.Day}}</span>
+      </div>
+      {{$.LPChart}}
+      {{if lt $.RankDays 7}}<p class="note">Riot only exposes the current standing, so history starts with the first snapshot ({{$.RankFrom}}) and grows by one point per day of syncing.</p>{{end}}
+    {{else}}
+      <p class="muted">No rank snapshot yet. Each sync records today's standing.</p>
+    {{end}}
+  </section>
+
+  <section class="card">
+    <h2>Recent form</h2>
+    <div class="streak" aria-label="Last 10 games, newest first">
+      {{range .Recent}}<a href="/matches/{{path .MatchID}}" class="{{if .Win}}w{{else}}l{{end}}" title="{{champ .Champion}} {{if .Win}}win{{else}}loss{{end}}, {{.Start.Format "Jan 2"}}">{{if .Win}}W{{else}}L{{end}}</a>{{end}}
+    </div>
+    {{if .WRChart}}
+      <div class="legend"><span class="key s1"></span>Last 20 <span class="key s2"></span>Last 10 <span class="key ref"></span>50%</div>
+      {{.WRChart}}
+    {{else}}
+      <p class="muted">The rolling win rate needs at least 10 games.</p>
+    {{end}}
+  </section>
+</div>
+
+{{template "tiles" .Sum.Overall}}
+
+<div class="grid two">
+  <section class="card">
+    <h2>Top champions</h2>
+    <table class="tbl">
+      <thead><tr><th>Champion</th><th class="r">Games</th><th class="r" title="Win rate blended with 10 games at your overall win rate">Adj. WR</th><th class="r">KDA</th><th class="r">CS/m</th></tr></thead>
+      <tbody>
+      {{range .TopChamps}}
+        <tr>
+          <td><a class="champ" href="/champions/{{path .Key}}?queue={{$.Queue.Key}}"><span class="icon" data-initials="{{initials .Key}}"><img src="{{champImg .Key $.Patch}}" alt="" loading="lazy" width="28" height="28"></span>{{champ .Key}}</a></td>
+          <td class="r"><strong>{{.Games}}</strong> <span class="muted">{{.Wins}}-{{.Losses}}</span></td>
+          <td class="r {{if ge .Games 5}}{{wrClass .Adjusted}}{{end}}">{{pct .Adjusted}}</td>
+          <td class="r">{{num .KDA 2}}</td>
+          <td class="r">{{num .CSPerMin 1}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    <p class="note">Overall win rate {{pct .Sum.Base}}. Small samples are pulled toward it; see <a href="/champions?queue={{.Queue.Key}}">all champions</a>.</p>
+  </section>
+
+  <section class="card">
+    <h2>Roles</h2>
+    <div class="bars">
+    {{range .Sum.Roles}}
+      <div class="bar-row">
+        <span class="bar-label">{{.Key}}</span>
+        <span class="bar"><span style="width: {{widthPct .Games $.RoleMax}}"></span></span>
+        <span class="bar-val"><strong>{{.Games}}</strong> <span class="{{wrClass .WinRate}}">{{pct .WinRate}}</span></span>
+      </div>
+    {{end}}
+    </div>
+    <h3>Gold lead at 15 vs result</h3>
+    <div class="bars">
+    {{range .Sum.Buckets}}
+      <div class="bar-row" title="{{.Games}} games">
+        <span class="bar-label">{{.Label}}</span>
+        <span class="bar wr"><span style="width: {{pctBar .WinRate}}"></span></span>
+        <span class="bar-val">{{pct .WinRate}} <span class="muted">({{.Games}})</span></span>
+      </div>
+    {{end}}
+    </div>
+  </section>
+</div>
+
+<section class="card">
+  <h2>What stands out</h2>
+  {{if .Sum.Notes}}
+    <ul class="notes">{{range .Sum.Notes}}<li>{{.}}</li>{{end}}</ul>
+  {{else}}
+    <p class="muted">Nothing clear yet. More games, or games with timelines, will help.</p>
+  {{end}}
+  <p class="note">{{len .Sum.Games}} games ({{.Sum.Remakes}} remakes left out, {{.Sum.Timelines}} with timelines). These compare you with yourself; elo benchmarks come with <code>sample</code> in Phase 4.</p>
+</section>
+{{end}}
+{{end}}

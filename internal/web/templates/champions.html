@@ -1,0 +1,47 @@
+{{define "content"}}
+<div class="pagehead">
+  <h1>Champions</h1>
+  {{template "queueSwitch" .Base}}
+</div>
+
+{{if not .Rows}}
+<p class="card empty">No games indexed for {{.Queue.Label}}.</p>
+{{else}}
+<section class="card">
+  <p class="note">Adjusted win rate blends each champion's record with 10 games at your overall win rate ({{pct .Sum.Base}}), so a 3-0 champion doesn't top the list. Check the game count before reading much into a row.</p>
+  <div class="scroll">
+  <table class="tbl champs">
+    <thead><tr>
+      <th>Champion</th>
+      {{$q := .Queue.Key}}{{$s := .Sort}}
+      <th class="r"><a href="/champions?queue={{$q}}&amp;sort=games" {{if eq $s "games"}}aria-current="true"{{end}}>Games</a></th>
+      <th class="r"><a href="/champions?queue={{$q}}&amp;sort=adj" {{if eq $s "adj"}}aria-current="true"{{end}}>Adj. WR</a></th>
+      <th class="r"><a href="/champions?queue={{$q}}&amp;sort=wr" {{if eq $s "wr"}}aria-current="true"{{end}}>Win rate</a></th>
+      <th class="r"><a href="/champions?queue={{$q}}&amp;sort=kda" {{if eq $s "kda"}}aria-current="true"{{end}}>KDA</a></th>
+      <th class="r"><a href="/champions?queue={{$q}}&amp;sort=cs" {{if eq $s "cs"}}aria-current="true"{{end}}>CS/m</a></th>
+      <th class="r">CS @10</th>
+      <th class="r"><a href="/champions?queue={{$q}}&amp;sort=gd15" {{if eq $s "gd15"}}aria-current="true"{{end}}>Gold @15</a></th>
+      <th class="r">KP</th>
+      <th class="r">Deaths &lt;15</th>
+    </tr></thead>
+    <tbody>
+    {{range .Rows}}
+      <tr>
+        <td><a class="champ" href="/champions/{{path .Key}}?queue={{$q}}"><span class="icon" data-initials="{{initials .Key}}"><img src="{{champImg .Key $.Patch}}" alt="" loading="lazy" width="28" height="28"></span>{{champ .Key}}</a></td>
+        <td class="r"><strong>{{.Games}}</strong> <span class="muted">{{.Wins}}-{{.Losses}}</span></td>
+        <td class="r {{if ge .Games 5}}{{wrClass .Adjusted}}{{end}}"><strong>{{pct .Adjusted}}</strong></td>
+        <td class="r muted">{{pct .WinRate}}</td>
+        <td class="r">{{num .KDA 2}}</td>
+        <td class="r">{{num .CSPerMin 1}}</td>
+        <td class="r {{diffClass .CSDiff10}}">{{signed .CSDiff10 1}}</td>
+        <td class="r {{diffClass .GoldDiff15}}">{{signed .GoldDiff15 0}}</td>
+        <td class="r">{{pct .KillPart}}</td>
+        <td class="r">{{num .DeathsBefore15 1}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</section>
+{{end}}
+{{end}}

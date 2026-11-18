@@ -1,5 +1,5 @@
 // Command draftsmith archives your ranked League of Legends games from the
-// Riot API and turns them into a report.
+// Riot API and turns them into a report and a dashboard.
 package main
 
 import (
@@ -14,11 +14,13 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/rojoloco04/draftsmith/internal/analysis"
+	"github.com/rojoloco04/draftsmith/internal/db"
 	"github.com/rojoloco04/draftsmith/internal/ingest"
 	"github.com/rojoloco04/draftsmith/internal/opgg"
 	"github.com/rojoloco04/draftsmith/internal/riot"
@@ -31,6 +33,8 @@ const usage = `draftsmith: ranked League of Legends stats from your own match ar
 
 Usage:
   draftsmith sync    [flags]          archive ranked games (and today's rank) from the Riot API
+  draftsmith serve   [flags]          run the dashboard (and sync in the background)
+  draftsmith reindex [flags]          rebuild the dashboard's SQLite index from the archive
   draftsmith report  [flags]          print a markdown report from the archive
   draftsmith export  [flags]          dump per-game features as JSON lines
   draftsmith meta tools [--schema]    list OP.GG's meta tools
@@ -60,6 +64,10 @@ func main() {
 	switch os.Args[1] {
 	case "sync":
 		err = cmdSync(ctx, os.Args[2:])
+	case "serve":
+		err = cmdServe(ctx, os.Args[2:])
+	case "reindex":
+		err = cmdReindex(ctx, os.Args[2:])
 	case "report":
 		err = cmdReport(os.Args[2:])
 	case "export":
@@ -115,26 +123,143 @@ func cmdSync(ctx context.Context, args []string) error {
 	rate := fs.String("rate", "20/1s,100/2m", "rate limits, comma separated N/duration")
 	fs.Parse(args)
 
+	sy, err := newSyncer(c, *rate)
+	if err != nil {
+		return err
+	}
+	sy.timelines = !*noTimelines
+	sy.max = *max
+	st, syncErr := sy.run(ctx, os.Stdout)
+	if errors.Is(syncErr, context.Canceled) {
+		fmt.Println("interrupted; rerun sync to continue where it stopped")
+		syncErr = nil
+	}
+	if st.PUUID == "" {
+		return syncErr
+	}
+	// The archive is the source of truth; keep the dashboard index current.
+	if err := indexArchive(context.WithoutCancel(ctx), sy.store, st, os.Stdout); err != nil {
+		return errors.Join(syncErr, fmt.Errorf("archive updated but indexing failed (run `draftsmith reindex`): %w", err))
+	}
+	return syncErr
+}
+
+// syncer is everything one sync run needs. sync and serve share it.
+type syncer struct {
+	client    *riot.Client
+	store     *store.Store
+	queues    []int
+	riotID    string
+	dataDir   string
+	timelines bool
+	max       int
+}
+
+func newSyncer(c common, rate string) (*syncer, error) {
 	key := os.Getenv("RIOT_API_KEY")
 	if key == "" {
-		return errors.New("RIOT_API_KEY is not set (get one at developer.riotgames.com)")
+		return nil, errors.New("RIOT_API_KEY is not set (get one at developer.riotgames.com)")
 	}
 	queues, err := c.queueList()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	limits, err := riot.ParseLimits(*rate)
+	limits, err := riot.ParseLimits(rate)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	client, err := riot.NewClient(key, c.platform, limits)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if base := os.Getenv("DRAFTSMITH_RIOT_BASE_URL"); base != "" { // for tests
 		client.BaseURL = func(string) string { return base }
 	}
 	s, err := store.Open(c.data)
+	if err != nil {
+		return nil, err
+	}
+	return &syncer{client: client, store: s, queues: queues, riotID: c.riotID, dataDir: c.data, timelines: true}, nil
+}
+
+// run resolves the account if needed, snapshots today's rank, archives new
+// games, and saves state. Progress goes to out. The returned state is valid
+// (with a PUUID) whenever the account is known, even if syncing failed.
+func (sy *syncer) run(ctx context.Context, out io.Writer) (store.State, error) {
+	s := sy.store
+	st, err := s.LoadState()
+	if err != nil {
+		return st, err
+	}
+
+	if sy.riotID != "" && !strings.EqualFold(sy.riotID, st.RiotID) || st.PUUID == "" {
+		if sy.riotID == "" {
+			return st, errors.New("first sync needs --riot-id Name#TAG (or DRAFTSMITH_RIOT_ID)")
+		}
+		name, tag, ok := strings.Cut(sy.riotID, "#")
+		if !ok {
+			return st, fmt.Errorf("riot id %q should look like Name#TAG", sy.riotID)
+		}
+		acct, err := sy.client.AccountByRiotID(ctx, name, tag)
+		if err != nil {
+			return st, fmt.Errorf("looking up %s: %w", sy.riotID, err)
+		}
+		if st.PUUID != "" && st.PUUID != acct.PUUID {
+			return st, fmt.Errorf("%s holds games for a different account (%s); use a separate --data directory", sy.dataDir, st.RiotID)
+		}
+		st.PUUID = acct.PUUID
+		st.RiotID = acct.GameName + "#" + acct.TagLine
+		st.Platform = sy.client.Platform()
+		fmt.Fprintf(out, "tracking %s (%s)\n", st.RiotID, st.Platform)
+	}
+
+	if entries, err := sy.client.LeagueEntries(ctx, st.PUUID); err != nil {
+		fmt.Fprintf(out, "warning: could not snapshot rank: %v\n", err)
+	} else if err := s.PutRankSnapshot(time.Now(), entries); err != nil {
+		return st, err
+	} else {
+		for _, e := range entries {
+			fmt.Fprintf(out, "%s: %s %s %d LP (%dW %dL)\n", e.QueueType, e.Tier, e.Rank, e.LeaguePoints, e.Wins, e.Losses)
+		}
+	}
+
+	res, syncErr := ingest.Sync(ctx, sy.client, s, &st, ingest.Options{
+		Queues:    sy.queues,
+		Timelines: sy.timelines,
+		Max:       sy.max,
+		Log:       out,
+	})
+	st.LastSync = time.Now()
+	if err := s.SaveState(st); err != nil {
+		return st, err
+	}
+	fmt.Fprintf(out, "archived %d matches and %d timelines (%d timelines no longer on Riot's side, %d errors)\n",
+		res.NewMatches, res.NewTimelines, res.MissingTimelines, res.Errors)
+	return st, syncErr
+}
+
+// indexArchive brings the SQLite index in the data dir up to date.
+func indexArchive(ctx context.Context, s *store.Store, st store.State, out io.Writer) error {
+	d, err := db.OpenDir(ctx, s.Dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	res, err := d.Index(ctx, s, st.PUUID)
+	if err != nil {
+		return err
+	}
+	if res.Added+res.Updated > 0 || d.Rebuilt {
+		fmt.Fprintf(out, "indexed %d new games (%d updated)\n", res.Added, res.Updated)
+	}
+	return nil
+}
+
+func cmdReindex(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("reindex", flag.ExitOnError)
+	data := fs.String("data", env("DRAFTSMITH_DATA", "data"), "archive directory")
+	fs.Parse(args)
+	s, err := store.Open(*data)
 	if err != nil {
 		return err
 	}
@@ -142,55 +267,26 @@ func cmdSync(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-
-	if c.riotID != "" && !strings.EqualFold(c.riotID, st.RiotID) || st.PUUID == "" {
-		if c.riotID == "" {
-			return errors.New("first sync needs --riot-id Name#TAG (or DRAFTSMITH_RIOT_ID)")
-		}
-		name, tag, ok := strings.Cut(c.riotID, "#")
-		if !ok {
-			return fmt.Errorf("riot id %q should look like Name#TAG", c.riotID)
-		}
-		acct, err := client.AccountByRiotID(ctx, name, tag)
-		if err != nil {
-			return fmt.Errorf("looking up %s: %w", c.riotID, err)
-		}
-		if st.PUUID != "" && st.PUUID != acct.PUUID {
-			return fmt.Errorf("%s holds games for a different account (%s); use a separate --data directory", c.data, st.RiotID)
-		}
-		st.PUUID = acct.PUUID
-		st.RiotID = acct.GameName + "#" + acct.TagLine
-		st.Platform = client.Platform()
-		fmt.Printf("tracking %s (%s)\n", st.RiotID, st.Platform)
+	if st.PUUID == "" {
+		return errors.New("no archive yet; run `draftsmith sync --riot-id Name#TAG` first")
 	}
-
-	if entries, err := client.LeagueEntries(ctx, st.PUUID); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not snapshot rank: %v\n", err)
-	} else if err := s.PutRankSnapshot(time.Now(), entries); err != nil {
-		return err
-	} else {
-		for _, e := range entries {
-			fmt.Printf("%s: %s %s %d LP (%dW %dL)\n", e.QueueType, e.Tier, e.Rank, e.LeaguePoints, e.Wins, e.Losses)
-		}
-	}
-
-	res, syncErr := ingest.Sync(ctx, client, s, &st, ingest.Options{
-		Queues:    queues,
-		Timelines: !*noTimelines,
-		Max:       *max,
-		Log:       os.Stdout,
-	})
-	st.LastSync = time.Now()
-	if err := s.SaveState(st); err != nil {
+	d, err := db.OpenDir(ctx, *data)
+	if err != nil {
 		return err
 	}
-	fmt.Printf("archived %d matches and %d timelines (%d timelines no longer on Riot's side, %d errors)\n",
-		res.NewMatches, res.NewTimelines, res.MissingTimelines, res.Errors)
-	if errors.Is(syncErr, context.Canceled) {
-		fmt.Println("interrupted; rerun sync to continue where it stopped")
-		return nil
+	defer d.Close()
+	start := time.Now()
+	res, err := d.Rebuild(ctx, s, st.PUUID)
+	if err != nil {
+		return err
 	}
-	return syncErr
+	fmt.Printf("indexed %d games and %d rank snapshots into %s in %s",
+		res.Added, res.Ranks, filepath.Join(*data, db.FileName), time.Since(start).Round(time.Millisecond))
+	if res.Skipped > 0 {
+		fmt.Printf(" (%d archived matches without %s skipped)", res.Skipped, st.RiotID)
+	}
+	fmt.Println()
+	return nil
 }
 
 func loadForAnalysis(c common) (*store.Store, store.State, []analysis.Game, error) {
