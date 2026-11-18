@@ -67,12 +67,7 @@ const mapEdge = 14870
 // Extract computes features for puuid. ok is false if the player is not in
 // the match. tl may be nil.
 func Extract(m *riot.Match, tl *riot.Timeline, puuid string) (g Game, ok bool) {
-	var me *riot.Participant
-	for i := range m.Info.Participants {
-		if m.Info.Participants[i].PUUID == puuid {
-			me = &m.Info.Participants[i]
-		}
-	}
+	me, opp := meAndOpponent(m, puuid)
 	if me == nil {
 		return g, false
 	}
@@ -107,14 +102,11 @@ func Extract(m *riot.Match, tl *riot.Timeline, puuid string) (g Game, ok bool) {
 	}
 
 	teamKills, teamDmg := 0, 0
-	var opp *riot.Participant
 	for i := range m.Info.Participants {
 		p := &m.Info.Participants[i]
 		if p.TeamID == me.TeamID {
 			teamKills += p.Kills
 			teamDmg += p.TotalDamageDealtToChampions
-		} else if me.TeamPosition != "" && p.TeamPosition == me.TeamPosition {
-			opp = p
 		}
 	}
 	if opp != nil {
@@ -161,6 +153,27 @@ func Extract(m *riot.Match, tl *riot.Timeline, puuid string) (g Game, ok bool) {
 		}
 	}
 	return g, true
+}
+
+// meAndOpponent finds the tracked player and their lane opponent (same
+// teamPosition on the other team). me is nil if puuid is not in the match;
+// opp is nil if there is no clear opponent.
+func meAndOpponent(m *riot.Match, puuid string) (me, opp *riot.Participant) {
+	for i := range m.Info.Participants {
+		if m.Info.Participants[i].PUUID == puuid {
+			me = &m.Info.Participants[i]
+		}
+	}
+	if me == nil || me.TeamPosition == "" {
+		return me, nil
+	}
+	for i := range m.Info.Participants {
+		p := &m.Info.Participants[i]
+		if p.TeamID != me.TeamID && p.TeamPosition == me.TeamPosition {
+			opp = p
+		}
+	}
+	return me, opp
 }
 
 func laneAt(tl *riot.Timeline, minute int, myID, oppID int) *LaneDiff {

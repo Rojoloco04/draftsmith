@@ -28,6 +28,7 @@ type Participant struct {
 	RiotIDGameName              string `json:"riotIdGameName"`
 	RiotIDTagline               string `json:"riotIdTagline"`
 	ChampionName                string `json:"championName"`
+	ChampLevel                  int    `json:"champLevel"`
 	TeamID                      int    `json:"teamId"`
 	TeamPosition                string `json:"teamPosition"`
 	IndividualPosition          string `json:"individualPosition"`
@@ -42,6 +43,18 @@ type Participant struct {
 	TotalDamageDealtToChampions int    `json:"totalDamageDealtToChampions"`
 	GoldEarned                  int    `json:"goldEarned"`
 	GameEndedInEarlySurrender   bool   `json:"gameEndedInEarlySurrender"`
+	Item0                       int    `json:"item0"`
+	Item1                       int    `json:"item1"`
+	Item2                       int    `json:"item2"`
+	Item3                       int    `json:"item3"`
+	Item4                       int    `json:"item4"`
+	Item5                       int    `json:"item5"`
+	Item6                       int    `json:"item6"` // trinket
+}
+
+// Items returns item0..item6 (0 for an empty slot); the last is the trinket.
+func (p *Participant) Items() [7]int {
+	return [7]int{p.Item0, p.Item1, p.Item2, p.Item3, p.Item4, p.Item5, p.Item6}
 }
 
 type Team struct {

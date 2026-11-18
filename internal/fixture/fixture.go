@@ -28,7 +28,9 @@ type Spec struct {
 	Assists              int
 	GoldLead             int // tracked player's gold lead over opponent at every frame
 	CSLead               int
-	EarlyDeathsEnemySide int // deaths at minute 5.. on enemy half
+	EarlyDeathsEnemySide int  // deaths at minute 5.. on enemy half
+	Queue                int  // default solo queue
+	NoTimeline           bool // Archive stores no timeline for this game
 }
 
 func (s *Spec) defaults() {
@@ -37,6 +39,9 @@ func (s *Spec) defaults() {
 	}
 	if s.Position == "" {
 		s.Position = "MIDDLE"
+	}
+	if s.Queue == 0 {
+		s.Queue = riot.QueueSoloDuo
 	}
 }
 
@@ -50,7 +55,7 @@ func Match(s Spec) riot.Match {
 	m.Info.GameStartTimestamp = s.StartMs
 	m.Info.GameDuration = s.Seconds
 	m.Info.GameVersion = "15.22.712.1234"
-	m.Info.QueueID = riot.QueueSoloDuo
+	m.Info.QueueID = s.Queue
 	m.Info.PlatformID = "NA1"
 	for team := 0; team < 2; team++ {
 		for i, pos := range positions {
@@ -70,6 +75,10 @@ func Match(s Spec) riot.Match {
 				VisionScore:                 20,
 				TotalDamageDealtToChampions: 15000,
 				GoldEarned:                  10000,
+				ChampLevel:                  14,
+				Item0:                       1055,
+				Item1:                       3006,
+				Item6:                       3340,
 			}
 			if team == 0 && pos == s.Position {
 				p.PUUID = MePUUID

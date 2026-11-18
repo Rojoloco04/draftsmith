@@ -97,6 +97,9 @@ func (s *Store) HasTimeline(id string) bool {
 	return exists(s.timelinePath(id)) || exists(s.missingPath(id))
 }
 
+// TimelineArchived is true only if the timeline itself is stored.
+func (s *Store) TimelineArchived(id string) bool { return exists(s.timelinePath(id)) }
+
 func (s *Store) PutMatch(id string, raw []byte) error {
 	return writeGzip(s.matchPath(id), raw)
 }
@@ -141,23 +144,35 @@ func (s *Store) PutRankSnapshot(day time.Time, v any) error {
 
 // LatestRankSnapshot returns the newest snapshot, or nil if none.
 func (s *Store) LatestRankSnapshot() ([]byte, string, error) {
-	entries, err := os.ReadDir(filepath.Join(s.Dir, "ranks"))
-	if err != nil {
+	days, err := s.RankSnapshotDays()
+	if err != nil || len(days) == 0 {
 		return nil, "", err
 	}
-	var names []string
+	last := days[len(days)-1]
+	b, err := s.LoadRankSnapshot(last)
+	return b, last, err
+}
+
+// RankSnapshotDays lists the days (YYYY-MM-DD) with a rank snapshot, oldest
+// first.
+func (s *Store) RankSnapshotDays() ([]string, error) {
+	entries, err := os.ReadDir(filepath.Join(s.Dir, "ranks"))
+	if err != nil {
+		return nil, err
+	}
+	var days []string
 	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), ".json") {
-			names = append(names, e.Name())
+		if day, ok := strings.CutSuffix(e.Name(), ".json"); ok {
+			days = append(days, day)
 		}
 	}
-	if len(names) == 0 {
-		return nil, "", nil
-	}
-	sort.Strings(names)
-	last := names[len(names)-1]
-	b, err := os.ReadFile(filepath.Join(s.Dir, "ranks", last))
-	return b, strings.TrimSuffix(last, ".json"), err
+	sort.Strings(days)
+	return days, nil
+}
+
+// LoadRankSnapshot reads the snapshot for day (YYYY-MM-DD).
+func (s *Store) LoadRankSnapshot(day string) ([]byte, error) {
+	return os.ReadFile(filepath.Join(s.Dir, "ranks", safe(day)+".json"))
 }
 
 func (s *Store) MetaPath(key string) string {
