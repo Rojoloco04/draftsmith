@@ -73,7 +73,11 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
 .nav a[aria-current] { color: var(--text); background: var(--panel-2); font-weight: 600; }
 .nav a.soon::after { content: "soon"; font-size: .65rem; margin-left: 5px; color: var(--muted); vertical-align: super; }
 .who { margin-left: auto; color: var(--muted); }
-@media (max-width: 640px) { .who { display: none; } .top-inner { gap: 8px 16px; padding-top: 8px; padding-bottom: 8px; } }
+.sync { display: inline-flex; align-items: center; min-height: 28px; }
+.btn { font: inherit; font-size: .85rem; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 640px) { .who { display: none; } .sync { margin-left: auto; } .top-inner { gap: 8px 16px; padding-top: 8px; padding-bottom: 8px; } }
 
 .pagehead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .pagehead h1 { margin: 0; }

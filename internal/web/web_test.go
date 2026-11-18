@@ -28,6 +28,13 @@ func newTestServer(t *testing.T) *httptest.Server {
 // newTestServerWith is newTestServer with OP.GG data from m (nil for off).
 func newTestServerWith(t *testing.T, m MetaSource) *httptest.Server {
 	t.Helper()
+	_, ts := newTestApp(t, m)
+	return ts
+}
+
+// newTestApp is newTestServerWith, also returning the Server.
+func newTestApp(t *testing.T, m MetaSource) (*Server, *httptest.Server) {
+	t.Helper()
 	dir := t.TempDir()
 	s, err := store.Open(dir)
 	if err != nil {
@@ -72,7 +79,7 @@ func newTestServerWith(t *testing.T, m MetaSource) *httptest.Server {
 	}
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
-	return ts
+	return srv, ts
 }
 
 func get(t *testing.T, ts *httptest.Server, path string, hdr ...string) (int, string) {

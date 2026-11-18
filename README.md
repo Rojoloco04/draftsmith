@@ -44,6 +44,8 @@ draftsmith reindex                         # rebuild data/draftsmith.db from the
 
 Pages: an overview (rank and LP history, rolling win rate, top champions, roles, gold lead at 15 vs result, notes), match history with role and champion filters, a match page (both teams' stats, your gold and CS against your lane opponent, where you died), per-champion stats with matchups, and an OP.GG tier list.
 
+Background sync checks for new games every 25 minutes. To pick up a game you just finished, press **Refresh** in the header: it syncs right away and reloads the page when it's done.
+
 OP.GG data (Emerald+, current patch) shows up in three places: the tier list page, with your own record next to each champion; a "your pool vs the meta" card and a meta tier column on the champions page; and an OP.GG card on each champion page with its tier, rates, and best and worst matchups, next to your record against those champions. Responses are cached in `data/draftsmith.db` and refreshed daily. If OP.GG is unreachable, the last copy is shown with its age.
 
 The dashboard has no login, so it only listens where you tell it to and refuses `0.0.0.0`. Keep it on localhost or Tailscale; don't port forward it. Other players appear as champion and position only. Champion and item icons load from Riot's Data Dragon CDN.

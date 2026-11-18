@@ -1,5 +1,15 @@
 {{/* Shared fragments. */}}
 
+{{/* The header's refresh control. While a sync runs it polls GET /sync;
+     with .Wait the response to the last poll reloads the page. */}}
+{{define "sync"}}
+<span id="sync" class="sync"{{if .Syncing}} hx-get="/sync{{if .Wait}}?wait=1{{end}}" hx-trigger="every 1s" hx-swap="outerHTML"{{end}}>
+  {{if .Syncing}}<span class="pill live">Syncing…</span>
+  {{else if .CanRefresh}}<button type="button" class="btn" hx-post="/sync" hx-target="#sync" hx-swap="outerHTML" title="Check the Riot API for new games now (last sync {{ago .LastSync}})">Refresh</button>
+  {{end}}
+</span>
+{{end}}
+
 {{define "queueSwitch"}}
 <div class="seg" role="group" aria-label="Queue">
   {{$cur := .Queue.Key}}{{$path := .Path}}

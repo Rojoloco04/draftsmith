@@ -21,6 +21,7 @@
       <a href="/champ-select" class="soon" {{if eq .Nav "champ-select"}}aria-current="page"{{end}}>Champ select</a>
     </nav>
     <span class="who">{{.RiotID}}</span>
+    {{template "sync" .Sync}}
   </div>
 </header>
 <main class="wrap">

@@ -36,6 +36,16 @@ type Status struct {
 	SyncDisabled string
 }
 
+// syncView is the header's refresh control.
+type syncView struct {
+	Status
+	// CanRefresh is false when no refresh function is set.
+	CanRefresh bool
+	// Wait makes the control reload the page once the sync it started
+	// finishes, so new games show up.
+	Wait bool
+}
+
 type Server struct {
 	db     *db.DB
 	riotID string
@@ -43,8 +53,9 @@ type Server struct {
 	pages  map[string]*template.Template
 	meta   MetaSource
 
-	mu     sync.Mutex
-	status Status
+	mu      sync.Mutex
+	status  Status
+	refresh func() bool
 }
 
 // New builds a server over an indexed database. riotID is the tracked
@@ -71,6 +82,21 @@ func (s *Server) SetStatus(f func(*Status)) {
 	f(&s.status)
 }
 
+// SetRefresh enables the header's Refresh button. f asks for a sync now
+// and reports whether it was queued. It's called with the server's lock
+// held, so it must not block or call back into the server.
+func (s *Server) SetRefresh(f func() bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.refresh = f
+}
+
+func (s *Server) syncView(wait bool) syncView {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return syncView{Status: s.status, CanRefresh: s.refresh != nil && s.status.SyncDisabled == "", Wait: wait}
+}
+
 func (s *Server) getStatus() Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -88,6 +114,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /champions", s.champions)
 	mux.HandleFunc("GET /champions/{name}", s.champion)
 	mux.HandleFunc("GET /tier-list", s.tierListPage)
+	mux.HandleFunc("GET /sync", s.syncStatus)
+	mux.HandleFunc("POST /sync", s.syncNow)
 	mux.HandleFunc("GET /champ-select", s.soon("Champ select", "champ-select", "The live champ select helper arrives with `draftsmith watch` in Phase 3."))
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusNotFound, errors.New("page not found"))
@@ -104,6 +132,7 @@ type Base struct {
 	Queue  queueOpt
 	Queues []queueOpt
 	Status Status
+	Sync   syncView
 	Now    time.Time
 }
 
@@ -133,7 +162,7 @@ func (s *Server) base(r *http.Request, title, nav string) Base {
 	return Base{
 		Title: title, Nav: nav, Path: r.URL.Path, RiotID: s.riotID,
 		Queue: queueFrom(r), Queues: queueOpts,
-		Status: s.getStatus(), Now: time.Now(),
+		Status: s.getStatus(), Sync: s.syncView(false), Now: time.Now(),
 	}
 }
 
@@ -177,6 +206,38 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, code int, err erro
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(code)
 	w.Write(buf.Bytes())
+}
+
+// syncNow starts a sync from the Refresh button and returns the control,
+// which then polls GET /sync until the sync is done. Only htmx requests
+// are accepted: a cross-site form can't set the HX-Request header, so
+// other sites can't trigger syncs through the browser.
+func (s *Server) syncNow(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("HX-Request") != "true" {
+		http.Error(w, "refresh from the dashboard", http.StatusForbidden)
+		return
+	}
+	s.mu.Lock()
+	ok := s.refresh != nil && s.status.SyncDisabled == ""
+	if ok && !s.status.Syncing && s.refresh() {
+		s.status.Syncing = true // the loop sets it too; this shows it at once
+	}
+	s.mu.Unlock()
+	if !ok {
+		http.Error(w, "background sync is off", http.StatusConflict)
+		return
+	}
+	s.render(w, r, "overview", "sync", s.syncView(true))
+}
+
+// syncStatus is the control's poll while a sync runs. With wait set, the
+// page reloads once the sync is done.
+func (s *Server) syncStatus(w http.ResponseWriter, r *http.Request) {
+	v := s.syncView(r.URL.Query().Get("wait") == "1")
+	if v.Wait && !v.Syncing {
+		w.Header().Set("HX-Refresh", "true")
+	}
+	s.render(w, r, "overview", "sync", v)
 }
 
 func (s *Server) soon(title, nav, msg string) http.HandlerFunc {

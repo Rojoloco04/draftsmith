@@ -128,7 +128,18 @@ func cmdServe(ctx context.Context, args []string) error {
 	logger.Printf("dashboard for %s at http://%s", st.RiotID, ln.Addr())
 
 	if sy != nil {
-		go syncLoop(ctx, sy, d, srv, *every, logger)
+		// The Refresh button asks for a sync now. One request can wait;
+		// more while it does are dropped.
+		now := make(chan struct{}, 1)
+		srv.SetRefresh(func() bool {
+			select {
+			case now <- struct{}{}:
+				return true
+			default:
+				return false
+			}
+		})
+		go syncLoop(ctx, sy, d, srv, *every, now, logger)
 	}
 
 	errc := make(chan error, 1)
@@ -144,10 +155,11 @@ func cmdServe(ctx context.Context, args []string) error {
 	return hs.Shutdown(shutCtx)
 }
 
-// syncLoop syncs right away and then every interval, reindexing after each
-// run. Errors are logged and shown in the dashboard footer; the next tick
-// tries again.
-func syncLoop(ctx context.Context, sy *syncer, d *db.DB, srv *web.Server, every time.Duration, logger *log.Logger) {
+// syncLoop syncs right away, then every interval and whenever now
+// receives (the Refresh button), reindexing after each run. A sync from
+// now restarts the interval. Errors are logged and shown in the dashboard
+// footer; the next run tries again.
+func syncLoop(ctx context.Context, sy *syncer, d *db.DB, srv *web.Server, every time.Duration, now <-chan struct{}, logger *log.Logger) {
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
@@ -179,6 +191,9 @@ func syncLoop(ctx context.Context, sy *syncer, d *db.DB, srv *web.Server, every 
 		case <-ctx.Done():
 			return
 		case <-t.C:
+		case <-now:
+			logger.Printf("sync requested from the dashboard")
+			t.Reset(every)
 		}
 	}
 }
