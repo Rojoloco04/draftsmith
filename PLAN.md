@@ -4,7 +4,7 @@ A personal OP.GG/U.GG for one player: my ranked stats dashboard, a meta tier lis
 
 ## Where things stand
 
-Done (commits `09ccc8e`, `b544eaf`, plus Phase 0 below):
+Done (commits `09ccc8e`, `b544eaf`, and Phase 0 in `1de8202` on branch `phase0-verify`):
 
 - `internal/riot`: Riot API client with a multi-window rate limiter (20/1s, 100/2m by default), 429 Retry-After handling, `ErrNotFound`/`ErrAuth` sentinels. Endpoints: account-v1 by Riot ID, match-v5 ids/match/timeline, league-v4 entries by PUUID.
 - `internal/store`: raw match and timeline JSON archived gzipped under `data/`, plus state, daily rank snapshots, and an OP.GG response cache.
@@ -14,7 +14,14 @@ Done (commits `09ccc8e`, `b544eaf`, plus Phase 0 below):
 - CLI: `sync`, `report`, `export`, `meta tools`, `meta call`, `version`.
 - Tests use synthetic fixtures (`internal/fixture`), one scrubbed real game, and httptest fakes. Verified against the real Riot API and OP.GG in Phase 0.
 
-Why stdlib only so far: the sandbox it was written in couldn't reach the Go module proxy. That constraint is gone on this machine, so dependencies are fine where they earn their place (see Open decisions).
+Why stdlib only so far: the sandbox it was written in couldn't reach the Go module proxy. That constraint is gone on this machine, so dependencies are fine where they earn their place.
+
+**Next up: Phase 1, on branch `phase1-dashboard`** (branched from `phase0-verify`, no commits yet; neither branch is merged to `main`).
+
+Dev environment notes:
+
+- Go 1.27.4 was installed with winget on 2026-11-17 (`C:\Program Files\Go\bin`). Shells started before that install don't have it on PATH; in PowerShell run `$env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [Environment]::GetEnvironmentVariable("Path","User")` first. Git Bash may need a restart.
+- `.env` is set up for Rojoloco#0419 on na1 with a working key. `data/` already holds the full archive, so `serve` has real data to show from the start.
 
 ## Phase 0: verify against real data (done 2026-11-17)
 
@@ -31,17 +38,38 @@ Why stdlib only so far: the sandbox it was written in couldn't reach the Go modu
 
 Goal: an OP.GG-style site for me, served by the Go binary, reachable over Tailscale only.
 
+Decided:
+
+- **Storage: SQLite via `modernc.org/sqlite`** (pure Go, no cgo). The gzipped raw JSON under `data/matches` and `data/timelines` stays the source of truth; SQLite is a derived index that can always be rebuilt from it (`draftsmith reindex`, and automatically when the schema version changes). DB file at `data/draftsmith.db`.
 - Server-rendered `html/template` + `embed`, htmx for interactivity, a small chart library vendored into `web/static` (no CDN). No SPA build step.
 - Bind to `127.0.0.1` by default, `--addr` to bind the Tailscale IP. No auth beyond that, so never bind `0.0.0.0` and never port forward.
-- Background jobs inside `serve`: sync my games every 20 to 30 minutes, OP.GG meta refresh daily. My own sync gets rate limit priority over everything else.
-- Pages:
-  - **Overview**: rank + LP history (from daily snapshots), win rate trend, role split, top champions, "what stands out" notes from the report.
-  - **Match history**: list with champion, KDA, CS, result, lane diffs; detail view with both teams' end-of-game stats and my gold/CS curve vs my lane opponent.
-  - **Champions**: my per-champion table (games, raw and adjusted win rate, KDA, CS/min, lane diffs) with drill-down to matchups.
-  - **Tier list**: from OP.GG (Emerald+ only), filter by role. Show only champions above a pick rate floor.
-  - **Champion page**: OP.GG build, runes, counters, alongside my own record on that champion.
-  - **Champ select**: live view fed by `watch` (Phase 3), via SSE.
-- Analysis should move from "load every gzip on each request" to a cached feature table that updates on sync (in memory with a snapshot file, or SQLite; see Open decisions).
+
+Build order:
+
+1. `internal/db`: open/migrate (a `schema_version` pragma or table), and tables for:
+   - `games`: one row per match from `analysis.Game` (match id, start, patch, queue, remake, minutes, champion, role, opponent, win, K/D/A, CS, per-minute stats, KP, damage share, control wards, at10/at15 gold/CS/XP and diffs, deaths before 15, deaths on enemy half, has_timeline).
+   - `deaths`: match id, minute, x, y (for a heatmap later).
+   - `participants`: all 10 players' end-of-game stats per match for the match detail page. Store champion, team, position, K/D/A, CS, gold, damage, vision, items. **Do not store other players' names, Riot IDs, or PUUIDs**; show them as champion + position only.
+   - `frames`: my and my lane opponent's per-minute gold/CS/XP for the detail page curve.
+   - `rank_snapshots`: date, queue, tier, division, LP, wins, losses (imported from `data/ranks/*.json`).
+   - `meta_cache`: key, fetched_at, patch, body (Phase 2 fills this; replaces `data/meta/*.json`).
+2. Indexing: after each sync, insert any archived match not yet in `games` (cheap: compare ids). Reuse `analysis.Extract`; don't duplicate feature logic.
+3. Make the report's aggregates reusable. `analysis/report.go` currently builds aggregates and writes markdown in one function (`WriteReport`, with the `agg` type, `groupBy`, buckets, `observations`). Split it into a `Summary` struct computed from `[]Game` (by season, by role, champion rows with adjusted WR, gold@15 buckets, matchups, recent form, notes) plus a markdown renderer, so the dashboard and `report` share one computation. Keep `report` output unchanged; the existing report tests should still pass.
+4. `internal/web`: handlers + templates + static files, all embedded.
+5. `draftsmith serve` in `cmd/draftsmith`: flags `--addr` (default `127.0.0.1:8080`), `--sync-every` (default 25m), `--no-sync`. Background sync calls `ingest.Sync` the same way `cmdSync` does (factor the shared setup out of `cmdSync` rather than copying it), then reindexes and snapshots rank. Log to stdout.
+6. Rate limit priority: the riot `Limiter` is one shared FIFO-ish limiter today. My sync is the only Riot consumer until Phase 4 (`sample`), so priority can wait until then; note it, don't build it yet.
+
+Pages (in order of value):
+
+- **Overview**: rank + LP history (from daily snapshots; only exists from 2026-11-17 on), win rate trend (rolling 10/20), role split, top champions, "what stands out" notes.
+- **Match history**: paginated list with champion, role, KDA, CS/min, result, gold diff @15, opponent; filters by role/champion/queue via htmx. Detail view: both teams' end-of-game stats (champion + position only, no names) and my gold/CS curve vs my lane opponent.
+- **Champions**: my per-champion table (games, raw and adjusted win rate, KDA, CS/min, lane diffs), drill-down to matchups and that champion's games.
+- **Tier list** and **Champion page (OP.GG side)**: need the Phase 2 parser; stub the nav links until then.
+- **Champ select**: live view fed by `watch` (Phase 3), via SSE.
+
+Testing: handlers with `httptest` against a temp SQLite DB built from `internal/fixture` (synthetic + the real scrubbed game). Run `gofmt`, `go vet ./...`, `go test ./...` before each commit.
+
+Small-sample caveat: there are only 47 real games, so per-champion and matchup views should show game counts prominently and use the adjusted win rate by default.
 
 ## Phase 2: OP.GG meta integration
 
@@ -85,7 +113,7 @@ Runs on the PC where League is played, because the League Client API (LCU) only 
 ## Open decisions
 
 - **Does Quartermaster run on the same PC as League?** If yes, `serve` and `watch` can be one process.
-- **Storage for the dashboard**: stay with files + in-memory cache, or add `modernc.org/sqlite` (pure Go, no cgo) now that dependencies are available. Leaning SQLite once Phase 1 needs filtering and pagination over match history.
+- ~~**Storage for the dashboard**~~: resolved 2026-11-17, SQLite (`modernc.org/sqlite`) as a rebuildable index over the raw JSON archive. See Phase 1.
 - ~~**OP.GG tier filter**~~: resolved. The tier list is fixed at Emerald+ (fine for me); per-champion analysis accepts `tier` (e.g. `emerald_plus`, `master_plus`).
 - **Riot product approval**: personal key registered as "Draftsmith"; if Riot asks for changes, update this file.
 
