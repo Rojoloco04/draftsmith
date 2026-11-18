@@ -17,7 +17,9 @@ OP.GG page: https://op.gg/lol/champions/...
 ```
 
 - Field order in the header follows the response, not the order you asked for in `desired_output_fields`.
-- Values are strings (double quoted), numbers, `true`/`false`, lists `[...]`, and nested constructors. I haven't seen `null` or escaped quotes yet; the parser should handle both anyway.
+- Values are strings (double quoted), numbers, `true`/`false`, lists `[...]`, and nested constructors. I haven't seen `null` or escaped quotes yet; the parser (`opgg.Parse`/`opgg.Decode`) handles both anyway.
+- **Class names don't identify where a value sits.** A class is declared once and reused for every value of the same shape: the `position: all` tier list declares only `class Top` and uses `Top(...)` for the mid, jungle, adc and support lists too, and champion analysis uses `StrongCounter(...)` for `weak_counters`. Key off field names, never class names.
+- Requested fields that don't exist are skipped, and the server adds a top-level `_field_diagnostics` value (`FieldDiagnostics(unmatched_fields, hint)`). Treat any unmatched field as a schema change.
 - A trailing `OP.GG page: <url>` line follows the expression.
 - There is no `structuredContent` in the MCP result; the text is the only payload.
 - `lol_get_lane_matchup_guide` is the exception: it returns plain JSON with full precision.
@@ -43,7 +45,8 @@ Args: `position` (`all`, `top`, `mid`, `jungle`, `adc`, `support`; default `all`
 Fields per champion: `champion, is_rip, play, win, win_rate, pick_rate, role_rate, ban_rate, kda, kill, tier, rank, rank_prev, rank_prev_patch`. `tier` is 1 (OP) to 5 (weak).
 
 - **No tier, region, or patch filter.** An undeclared `tier` argument is accepted and ignored. The data is Emerald+ (Yasuo mid's `play` matches `lol_get_champion_analysis` with `tier: emerald_plus` exactly), which matches the bracket I play in.
-- No patch in the response. Take it from `lol_get_champion_analysis` `data.trends.*.version` or from my latest game's patch.
+- No patch in the response. Take it from `lol_get_champion_analysis` `data.trends.win.version` (`"16.22"`) or from my latest game's patch.
+- Ask for `data.positions.{top,mid,jungle,adc,support}[].{...}` to get all five lanes in one call (about 11 KB with seven fields).
 - `champion` is the display name ("LeBlanc", "Twisted Fate", "Wukong", "Nunu & Willump"), not Riot's key. Join through `lol_list_champions`.
 
 ### `lol_get_champion_analysis`: builds, runes, counters for one champion
@@ -52,6 +55,7 @@ Required: `game_mode` (`ranked`, `flex`, `urf`, `aram`, `nexus_blitz`), `champio
 
 - **`tier` filter works**: `ALL`, `CHALLENGER`, `GRANDMASTER`, `MASTER_PLUS`, `MASTER`, `DIAMOND_PLUS`, `DIAMOND`, `EMERALD_PLUS`, `EMERALD`, `PLATINUM_PLUS`, `PLATINUM`, `GOLD_PLUS`, `GOLD`, `IBSG`, `SILVER`, `BRONZE`, `IRON` (lowercase accepted). Omitted gives the same numbers as `emerald_plus`.
 - Useful fields: `data.summary.average_stats.{play,win_rate,pick_rate,ban_rate,tier,rank}`, `data.runes.{primary_page_id,primary_rune_ids[],secondary_page_id,secondary_rune_ids[],stat_mod_ids[],play,win,pick_rate}` (the IDs needed to build an LCU rune page), `data.core_items`, `data.boots`, `data.starter_items`, `data.summoner_spells`, `data.skills.order[]`, `data.strong_counters[]` / `data.weak_counters[]` `.{champion_name,play,win,win_rate,my_win_rate,counter_win_rate}`, `data.damage_type` (AD/AP/BOTH, useful for team comp gaps), `data.trends.*.version` (patch).
+- In **both** counter lists, `win` counts the selected champion's wins, so `win / play` is my champion's win rate into that opponent. (The schema says `win_rate` in `weak_counters` is the counter's win rate, which is true for `win_rate` but not for `win`: Ahri into Katarina is `play` 7187, `win` 3481, `my_win_rate` 0.48.)
 - `data.counters_meta` is injected when counters are empty for lack of sample (seen on Wukong mid).
 - No region filter.
 
