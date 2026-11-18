@@ -22,7 +22,9 @@ Phase 1 (branch `phase1-dashboard`, commits `40330bf`, `c274e5c`, `410621f`; see
 
 The early code was stdlib only because the sandbox it was written in couldn't reach the Go module proxy. That constraint is gone; dependencies are fine where they earn their place.
 
-**Next up:** merge `phase0-verify` and `phase1-dashboard` into `main` (neither is merged yet; `phase1-dashboard` contains `phase0-verify`), then Phase 2 on a new branch, starting with the OP.GG class-notation parser.
+Phases 0 and 1 were merged into `main` on 2026-11-17 and pushed to the public repo `github.com/rojoloco04/draftsmith`. Everything in it is public, so keep secrets, raw archive data, and other players' identities out of commits.
+
+**Next up: Phase 2** on a new branch off `main`, starting with the OP.GG class-notation parser (see Phase 2 and `docs/opgg-tools.md`).
 
 Dev environment notes:
 
