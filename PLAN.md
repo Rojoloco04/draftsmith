@@ -24,9 +24,21 @@ The early code was stdlib only because the sandbox it was written in couldn't re
 
 Phases 0 and 1 were merged into `main` on 2026-11-17 and pushed to the public repo `github.com/rojoloco04/draftsmith`. Everything in it is public, so keep secrets, raw archive data, and other players' identities out of commits.
 
-Phase 2 (branch `phase2-meta`; see the Phase 2 section): the OP.GG class-notation parser (`opgg.Parse`/`opgg.Decode`), `internal/meta` (typed, cached tier list, champion table and champion analysis), and the dashboard's tier list page, pool-vs-meta card and per-champion OP.GG card. Not merged to `main` yet.
+Phase 2 (branch `phase2-meta`, commits `f40577c`, `8c782f3`, `c40be78`; see the Phase 2 section): the OP.GG class-notation parser (`opgg.Parse`/`opgg.Decode`), `internal/meta` (typed, cached tier list, champion table and champion analysis), and the dashboard's tier list page, pool-vs-meta card and per-champion OP.GG card. Merged into `main` (fast-forward) and pushed on 2026-11-17.
 
-**Next up:** look over the Phase 2 pages, merge `phase2-meta` into `main`, then Phase 3 (`watch`). The remaining Phase 2 item (pool vs meta in the markdown report) is small and can go either side of the merge.
+**Next up:**
+
+1. The small leftover from Phase 2: pool vs meta notes in the markdown `report`, reading only the `meta_cache` table (no network calls from `report`) and skipping the section when nothing is cached. `meta.PoolFit` already does the work; `report` needs a cache-only path (for example a `meta.Service` whose dial always fails, which serves whatever is cached however old, or a small cache-only reader in `internal/meta`).
+2. Phase 3 (`draftsmith watch`) on a new branch off `main`. Read the Phase 3 section and its compliance rules first. The first step is LCU discovery (lockfile, then process args) and polling `gameflow-phase`, verified against the real client. That needs League installed and running on this PC, so check with the user before relying on it.
+
+Handoff notes (things a new session would otherwise rediscover):
+
+- `gofmt -l` lists nearly every file because `core.autocrlf=true` gives CRLF working copies. That's noise; the repo stores LF. Run `gofmt -l` on files you touched, or check `gofmt -d` for real changes.
+- Python's text mode on Windows writes CRLF; pass `newline='
+'` when scripting edits to Go files, then `gofmt -w` them.
+- `go build -o draftsmith.exe ./cmd/draftsmith` can leave a `draftsmith.exe~` behind; delete it, don't commit it.
+- To check the dashboard against real data without calling Riot: `./draftsmith.exe serve --no-sync --addr 127.0.0.1:8099` (OP.GG is still called unless `--no-meta`). Stop it with `taskkill //F //IM draftsmith.exe` from Git Bash.
+- "Adjusted win rate" everywhere is `(wins + 10 × overall) / (games + 10)` (`analysis.PriorWeight`); the user asked about it, so mention the formula if it comes up in UI copy.
 
 Dev environment notes:
 
@@ -98,7 +110,7 @@ Testing: handlers with `httptest` against a temp SQLite DB built from `internal/
 
 Small-sample caveat: there are only 47 real games, so per-champion and matchup views should show game counts prominently and use the adjusted win rate by default.
 
-## Phase 2: OP.GG meta integration (dashboard side done 2026-11-18)
+## Phase 2: OP.GG meta integration (dashboard side done 2026-11-17)
 
 What shipped:
 

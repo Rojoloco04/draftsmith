@@ -67,7 +67,7 @@ Required: `position` (`none` infers the main lane), `my_champion`, `opponent_cha
 
 `data.champions[].{champion_id,key,name}`. `key` is Riot's `championName` (`MonkeyKing`, `Leblanc`, `TwistedFate`), `name` is the display name the tier list uses. Fetch once per patch.
 
-The table also lists mode variants with ids from 60001 and keys like `Jade_Annie` that share display names with the real champions (84 of 257 rows on 2026-11-18). Skip any key containing `_`; Riot keys never have one.
+The table also lists mode variants with ids from 60001 and keys like `Jade_Annie` that share display names with the real champions (84 of 257 rows on 2026-11-17). Skip any key containing `_`; Riot keys never have one.
 
 ### `lol_get_summoner_profile`
 

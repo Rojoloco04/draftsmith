@@ -117,7 +117,7 @@ func readTestdata(t *testing.T, name string) string {
 	return string(b)
 }
 
-// The fixtures are real responses captured on 2026-11-18 (patch 16.22).
+// The fixtures are real responses captured on 2026-11-17 (patch 16.22).
 
 func TestDecodeRealTierList(t *testing.T) {
 	type row struct {
