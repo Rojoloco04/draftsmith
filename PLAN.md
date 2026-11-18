@@ -4,7 +4,7 @@ A personal OP.GG/U.GG for one player: my ranked stats dashboard, a meta tier lis
 
 ## Where things stand
 
-Done (commits `09ccc8e`, `b544eaf`):
+Done (commits `09ccc8e`, `b544eaf`, plus Phase 0 below):
 
 - `internal/riot`: Riot API client with a multi-window rate limiter (20/1s, 100/2m by default), 429 Retry-After handling, `ErrNotFound`/`ErrAuth` sentinels. Endpoints: account-v1 by Riot ID, match-v5 ids/match/timeline, league-v4 entries by PUUID.
 - `internal/store`: raw match and timeline JSON archived gzipped under `data/`, plus state, daily rank snapshots, and an OP.GG response cache.
@@ -12,21 +12,20 @@ Done (commits `09ccc8e`, `b544eaf`):
 - `internal/analysis`: per-game features (CS/gold/vision per min, KP, damage share, gold/CS/XP diff vs lane opponent at 10 and 15, deaths before 15, deaths on the enemy half, death positions) and a markdown report.
 - `internal/opgg`: MCP client (Streamable HTTP, JSON or SSE responses, session header) for OP.GG's public server at `https://mcp-api.op.gg/mcp`.
 - CLI: `sync`, `report`, `export`, `meta tools`, `meta call`, `version`.
-- Tests use synthetic fixtures (`internal/fixture`) and httptest fakes. Nothing has been run against the real Riot API or OP.GG yet.
+- Tests use synthetic fixtures (`internal/fixture`), one scrubbed real game, and httptest fakes. Verified against the real Riot API and OP.GG in Phase 0.
 
 Why stdlib only so far: the sandbox it was written in couldn't reach the Go module proxy. That constraint is gone on this machine, so dependencies are fine where they earn their place (see Open decisions).
 
-## Phase 0: verify against real data (do first)
+## Phase 0: verify against real data (done 2026-11-17)
 
-1. Copy `.env.example` to `.env`, set `RIOT_API_KEY` and `DRAFTSMITH_RIOT_ID`. `.env` is gitignored, keep it that way.
-2. `go build -o draftsmith.exe ./cmd/draftsmith`, then `draftsmith sync --max 20` as a smoke test, then a full `draftsmith sync`.
-3. Check the things the fixtures assumed:
-   - `league-v4 /entries/by-puuid/{puuid}` returns the shape in `riot.LeagueEntry`.
-   - Match `teamPosition` values and timeline `participantFrames` / `CHAMPION_KILL` events match `riot/types.go`.
-   - `gameVersion` parses to a sensible patch, `gameDuration` is seconds.
-4. `draftsmith report` and sanity check the numbers against OP.GG for a few games.
-5. `draftsmith meta tools --schema` and record the input schemas for `lol_list_lane_meta_champions`, `lol_get_champion_analysis`, `lol_get_lane_matchup_guide`, `lol_get_summoner_profile` in `docs/opgg-tools.md`. Key question: is there a tier filter (Emerald+, Master+), and a position/region/patch filter?
-6. Save one real match + timeline (my own games only) as fixtures under `internal/fixture/testdata/` and add a test that parses them. Scrub other players' PUUIDs and Riot IDs before committing.
+- Real Riot API works end to end: 51 solo queue games archived (Jul 2025 to Nov 2026, patches 15.14 to 16.22), all with timelines, 4 remakes. Current rank EMERALD IV.
+- `riot/types.go` matches real payloads: no declared field missing in any match, `teamPosition` is always one of the five expected values, `gameDuration` is seconds, `frameInterval` is 60000, `CHAMPION_KILL` has `killerId`/`victimId`/`assistingParticipantIds`/`position`, and the league-v4 by-PUUID entry shape matches `riot.LeagueEntry`.
+- Gotcha: `metadata.participants` is **not** in participantId order in real data. Nothing relies on it; keep it that way and always key off `info.participants[].puuid`.
+- Every per-game feature (champion, result, KDA, CS, CS/min, KP, damage share, lane opponent, gold/CS diff at 10 and 15) matched an independent recompute from the raw JSON across all 47 non-remake games.
+- OP.GG findings are in `docs/opgg-tools.md`. Short version: responses are a positional class notation, not JSON (needs a small parser); rates are rounded to 2 decimals, so compute `win / play`; the tier list has no tier/region/patch filter and is Emerald+; champion analysis takes a `tier` filter; the tier list uses display names, so join through `lol_list_champions`.
+- One real game + timeline, scrubbed of every PUUID, Riot ID, summoner name and summoner ID, lives in `internal/fixture/testdata/` with `analysis.TestExtractRealGame` pinning its features.
+- Still to eyeball by hand: the report's numbers against OP.GG's site for a couple of games.
+- Windows note: PowerShell mangles JSON arguments to `meta call`. Use Git Bash, or read args from a file if this becomes annoying.
 
 ## Phase 1: dashboard (`draftsmith serve`)
 
@@ -39,7 +38,7 @@ Goal: an OP.GG-style site for me, served by the Go binary, reachable over Tailsc
   - **Overview**: rank + LP history (from daily snapshots), win rate trend, role split, top champions, "what stands out" notes from the report.
   - **Match history**: list with champion, KDA, CS, result, lane diffs; detail view with both teams' end-of-game stats and my gold/CS curve vs my lane opponent.
   - **Champions**: my per-champion table (games, raw and adjusted win rate, KDA, CS/min, lane diffs) with drill-down to matchups.
-  - **Tier list**: from OP.GG, filter by role and (if supported) Emerald+ / Master+. Show only champions above a pick rate floor.
+  - **Tier list**: from OP.GG (Emerald+ only), filter by role. Show only champions above a pick rate floor.
   - **Champion page**: OP.GG build, runes, counters, alongside my own record on that champion.
   - **Champ select**: live view fed by `watch` (Phase 3), via SSE.
 - Analysis should move from "load every gzip on each request" to a cached feature table that updates on sync (in memory with a snapshot file, or SQLite; see Open decisions).
@@ -47,7 +46,8 @@ Goal: an OP.GG-style site for me, served by the Go binary, reachable over Tailsc
 ## Phase 2: OP.GG meta integration
 
 - `internal/meta`: typed wrappers over the OP.GG tools once Phase 0 shows the schemas. Cache each response with a timestamp and patch; serve stale data if OP.GG is down and show its age.
-- Tier list: one call per role (per bracket if filterable) per day.
+- First piece: a parser for OP.GG's class notation into `map[string]any`/typed structs, tested on responses captured in `docs/opgg-tools.md` probes.
+- Tier list: one `position: all` call per day (no bracket filter; it's Emerald+). Rank by `win / play`, not the rounded `win_rate`.
 - Champion analysis: fetch on demand, cache per patch.
 - Join meta into my champion pool: my adjusted win rate next to the champion's current tier, so the report can say "strong for you and strong in the meta" vs "you're good on it but it's weak this patch".
 - Risk: this is an agent-facing endpoint, not a supported data API. Keep all OP.GG parsing in one package so a schema change is a one-file fix.
@@ -86,7 +86,7 @@ Runs on the PC where League is played, because the League Client API (LCU) only 
 
 - **Does Quartermaster run on the same PC as League?** If yes, `serve` and `watch` can be one process.
 - **Storage for the dashboard**: stay with files + in-memory cache, or add `modernc.org/sqlite` (pure Go, no cgo) now that dependencies are available. Leaning SQLite once Phase 1 needs filtering and pagination over match history.
-- **OP.GG tier filter**: if the tools can't filter by Emerald+/Master+, accept OP.GG's default bracket or reconsider a small crawler for those brackets.
+- ~~**OP.GG tier filter**~~: resolved. The tier list is fixed at Emerald+ (fine for me); per-champion analysis accepts `tier` (e.g. `emerald_plus`, `master_plus`).
 - **Riot product approval**: personal key registered as "Draftsmith"; if Riot asks for changes, update this file.
 
 ## Conventions
