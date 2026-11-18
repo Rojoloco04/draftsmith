@@ -28,7 +28,9 @@ Phase 2 (branch `phase2-meta`, commits `f40577c`, `8c782f3`, `c40be78`; see the 
 
 The Phase 2 leftover (pool vs meta in the markdown `report`) is done on `main`: `meta.NewCacheOnly` serves whatever is cached however old and never dials OP.GG (it has no client, so a stray call would panic rather than hit the network), and `report` renders `meta.PoolMarkdown` after the champion pool, leaving the section out when no tier list is cached or there's no index yet (it won't create one).
 
-**Next up:** Phase 3 (`draftsmith watch`) on a new branch off `main`. Read the Phase 3 section and its compliance rules first. The first step is LCU discovery (lockfile, then process args) and polling `gameflow-phase`, verified against the real client. That needs League installed and running on this PC, so check with the user before relying on it.
+Phase 3 is in progress on branch `phase3-watch` (see the Phase 3 section): client discovery, gameflow polling and reading champ select are done and checked against a real ranked champ select.
+
+**Next up:** Phase 3 suggestions. Score my pool for my assigned position (adjusted win rate and games from the index, OP.GG tier from the cached tier list, OP.GG counters vs the visible enemy laner once they're locked, team damage mix), log the top 3 with one-line reasons in `watch`, then push to the dashboard's champ select page. Enemy positions are blank in ranked, so the "enemy laner" has to be inferred (e.g. from OP.GG's position data for each enemy champion) or left out until it's clear.
 
 Handoff notes (things a new session would otherwise rediscover):
 
@@ -144,6 +146,23 @@ Original plan:
 ## Phase 3: champ select helper (`draftsmith watch`)
 
 Runs on the PC where League is played, because the League Client API (LCU) only listens on localhost.
+
+Done so far (branch `phase3-watch`, 2026-11-17):
+
+- `internal/lcu`: `Discover` reads `<install dir>/lockfile` (default `C:\Riot Games\League of Legends`, `--league-dir`/`DRAFTSMITH_LEAGUE_DIR` to override), then falls back to `LeagueClientUx.exe`'s command line through PowerShell CIM, keeping only `--app-port`, `--remoting-auth-token` and `--app-pid`. That command line also carries Riot Client tokens (including a base64 settings blob), so never print or log it.
+- TLS: the client's certificate (CN `rclient`, SAN `localhost` and `127.0.0.1`) is issued by Riot's published root (`internal/lcu/riotgames.pem`, SHA-256 `ca8c9d32...4ea3`, pinned in a test). Go's normal verification with that root as the only trusted CA works; nothing is skipped. curl on Windows (schannel) fails with a revocation check error, which is curl's problem, not the cert's.
+- `internal/watch` + `draftsmith watch`: polls `gameflow-phase` every 2s, reads `/lol-champ-select/v1/session` every 1s during ChampSelect, logs a one-line summary when anything but the countdown changes, and rediscovers the client after it closes or restarts. `--capture DIR` writes each (filtered) session plus the raw payload's key names without values.
+- `lcu.Session` declares only allowed fields, so decoding drops identity. Checked against a real ranked champ select (queue 420): every declared field exists under that name, and the captured files hold no identity fields. Two filtered snapshots are test fixtures in `internal/lcu/testdata`.
+
+Real client findings:
+
+- Phases seen: `Lobby`, `Matchmaking`, `ReadyCheck`, `ChampSelect`, `InProgress`. Timer phases: `PLANNING`, `BAN_PICK`, `FINALIZATION`, `GAME_STARTING`. Outside champ select the session is a 404 (`"No active delegate"`).
+- **Ranked leaves `bans.myTeamBans`/`theirTeamBans` empty.** Bans are only in `actions`, as completed `ban` actions (one per player, simultaneous), then a `ten_bans_reveal` action. Enemy ban actions read champion `0` until the reveal; `Session.BanList` also only takes enemy bans after the reveal completes, so nothing shows that the client doesn't.
+- `championId` is the hover during a player's pick turn and the pick after it; locked in means a completed `pick` action for that cell (`Session.Locked`). `championPickIntent` is the hover before the turn. Enemy hovers during their turn are visible, as they are in the client.
+- `myTeam` is reordered mid draft, so sort by `assignedPosition` (`top`, `jungle`, `middle`, `bottom`, `utility`) for display. `theirTeam[].assignedPosition` is always `""` in ranked.
+- Other non-identity fields worth having later: `myTeam[].isAutofilled` (now read), `queueId` (now read), `actions[][].pickTurn`, `timer.isInfinite`, `trades`/`positionSwaps`/`pickOrderSwaps` (cell + state only).
+
+Plan from here:
 
 - Discover the client: read the `lockfile` in the League install dir (`LeagueClient:pid:port:password:https`), fall back to `LeagueClientUx.exe` process args (`--app-port`, `--remoting-auth-token`). Basic auth `riot:<password>`. The cert is self-signed by Riot; pin Riot's root cert rather than disabling verification globally.
 - Start with polling (`GET /lol-gameflow/v1/gameflow-phase`, then `GET /lol-champ-select/v1/session` about once a second during ChampSelect). The WebSocket event stream is nicer but needs a dependency; only add it if polling feels laggy.

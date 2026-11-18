@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"time"
 
@@ -172,17 +173,38 @@ func (w *Watcher) summarize(s lcu.Session) string {
 		}
 		return fmt.Sprintf("#%d", id)
 	}
+	// Each slot is "position champion", with "?" for a hover that isn't
+	// locked in, "(autofill)" when filled, and mine in brackets. My team is
+	// in lane order (the client reorders the array mid draft); theirs has
+	// no positions, so it stays in cell order.
 	team := func(ms []lcu.Member) string {
+		ms = append([]lcu.Member(nil), ms...)
+		sort.SliceStable(ms, func(i, j int) bool {
+			if a, b := positionOrder[ms[i].AssignedPosition], positionOrder[ms[j].AssignedPosition]; a != b {
+				return a < b
+			}
+			return ms[i].CellID < ms[j].CellID
+		})
 		var parts []string
 		for _, m := range ms {
-			p := name(m.ChampionID)
-			if m.ChampionID == 0 && m.ChampionPickIntent != 0 {
+			var p string
+			switch {
+			case m.ChampionID != 0 && s.Locked(m.CellID):
+				p = name(m.ChampionID)
+			case m.ChampionID != 0:
+				p = name(m.ChampionID) + "?"
+			case m.ChampionPickIntent != 0:
 				p = name(m.ChampionPickIntent) + "?"
+			default:
+				p = "-"
 			}
 			if m.AssignedPosition != "" {
 				p = m.AssignedPosition + " " + p
 			}
-			if m.CellID == s.LocalPlayerCellID { // cell ids are unique across both teams
+			if m.IsAutofilled {
+				p += " (autofill)"
+			}
+			if m.CellID == s.LocalPlayerCellID {
 				p = "[" + p + "]"
 			}
 			parts = append(parts, p)
@@ -199,9 +221,14 @@ func (w *Watcher) summarize(s lcu.Session) string {
 		}
 		return strings.Join(parts, " ")
 	}
+	mine, theirs := s.BanList()
 	return fmt.Sprintf("%s | us: %s | them: %s | bans: %s / %s",
-		s.Timer.Phase, team(s.MyTeam), team(s.TheirTeam), ids(s.Bans.MyTeamBans), ids(s.Bans.TheirTeamBans))
+		s.Timer.Phase, team(s.MyTeam), team(s.TheirTeam), ids(mine), ids(theirs))
 }
+
+// positionOrder sorts the client's assignedPosition values in lane order,
+// with "" (unknown) last.
+var positionOrder = map[string]int{"top": 1, "jungle": 2, "middle": 3, "bottom": 4, "utility": 5, "": 6}
 
 // sleep waits for d, returning false if ctx ends first.
 func sleep(ctx context.Context, d time.Duration) bool {

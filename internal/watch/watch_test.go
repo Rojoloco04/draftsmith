@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -113,6 +114,22 @@ func TestWatcherFollowsTheClient(t *testing.T) {
 	}
 }
 
+func TestSummarizeRealChampSelect(t *testing.T) {
+	b, err := os.ReadFile("../lcu/testdata/champselect_final.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s lcu.Session
+	if err := json.Unmarshal(b, &s); err != nil {
+		t.Fatal(err)
+	}
+	// My team in lane order whatever the array order; theirs by cell.
+	want := "GAME_STARTING | us: top #157, jungle #254, [middle #3], bottom #221, utility #350 | them: #147, #498, #55, #107, #58 | bans: #7 #11 #133 #119 #53 / #53 #236 #112 #777 #200"
+	if got := (&Watcher{}).summarize(s); got != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
+}
+
 func TestWatcherChampSelect(t *testing.T) {
 	// A champ select as the client sends it, identity fields included;
 	// decoding must drop them.
@@ -142,6 +159,10 @@ func TestWatcherChampSelect(t *testing.T) {
 	picked.MyTeam[1].ChampionID = 103
 	picked.TheirTeam = []lcu.Member{{CellID: 5, Team: 2, ChampionID: 238}}
 	picked.Bans.MyTeamBans = []int{55}
+	picked.Actions = [][]lcu.Action{
+		{{ActorCellID: 2, ChampionID: 103, Type: "pick", Completed: true, IsAllyAction: true}},
+		{{ActorCellID: 5, ChampionID: 238, Type: "pick", Completed: true}},
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

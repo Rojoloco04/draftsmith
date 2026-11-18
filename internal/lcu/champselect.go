@@ -21,17 +21,21 @@ type Session struct {
 	Bans              Bans       `json:"bans"`
 	Timer             Timer      `json:"timer"`
 	IsCustomGame      bool       `json:"isCustomGame"`
+	QueueID           int        `json:"queueId"` // 420 is ranked solo/duo
 }
 
-// Member is one player's slot, by cell. ChampionID is a pick (or the
-// current hover while the pick is in progress), ChampionPickIntent a
-// declared intent before the pick turn; both are 0 when unset.
+// Member is one player's slot, by cell (cell ids are unique across both
+// teams). ChampionID is the hover during the player's pick turn and the
+// pick after it; whether it's locked in comes from the actions
+// (Session.Locked). ChampionPickIntent is a hover before the pick turn.
+// Both are 0 when unset.
 type Member struct {
 	CellID             int    `json:"cellId"`
 	Team               int    `json:"team"`
 	AssignedPosition   string `json:"assignedPosition"` // "top", "jungle", "middle", "bottom", "utility", or "" (blind pick, enemies)
 	ChampionID         int    `json:"championId"`
 	ChampionPickIntent int    `json:"championPickIntent"`
+	IsAutofilled       bool   `json:"isAutofilled"`
 }
 
 // Action is one pick or ban turn.
@@ -54,7 +58,7 @@ type Bans struct {
 
 // Timer is the current champ select phase and its time left.
 type Timer struct {
-	Phase                   string `json:"phase"` // PLANNING, BAN_PICK, FINALIZATION, GAME_STARTING
+	Phase                   string `json:"phase"`                   // PLANNING, BAN_PICK, FINALIZATION, GAME_STARTING
 	AdjustedTimeLeftInPhase int64  `json:"adjustedTimeLeftInPhase"` // ms
 	TotalTimeInPhase        int64  `json:"totalTimeInPhase"`        // ms
 	InternalNowInEpochMs    int64  `json:"internalNowInEpochMs"`
@@ -68,6 +72,52 @@ func (s Session) Me() (Member, bool) {
 		}
 	}
 	return Member{}, false
+}
+
+// Locked reports whether the player in cell has locked in their pick.
+func (s Session) Locked(cell int) bool {
+	for _, turn := range s.Actions {
+		for _, a := range turn {
+			if a.Type == "pick" && a.ActorCellID == cell && a.Completed {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// BanList returns the champions banned so far by my team and theirs.
+//
+// Ranked bans simultaneously: the client leaves Bans empty and reports
+// bans only as completed "ban" actions, with the enemy's hidden (champion
+// 0) until a "ten_bans_reveal" action completes. Enemy bans are only taken
+// after that reveal, so nothing shows that the client doesn't. Modes that
+// fill Bans use it as is.
+func (s Session) BanList() (mine, theirs []int) {
+	if len(s.Bans.MyTeamBans)+len(s.Bans.TheirTeamBans) > 0 {
+		return s.Bans.MyTeamBans, s.Bans.TheirTeamBans
+	}
+	revealed := true
+	for _, turn := range s.Actions {
+		for _, a := range turn {
+			if a.Type == "ten_bans_reveal" && !a.Completed {
+				revealed = false
+			}
+		}
+	}
+	for _, turn := range s.Actions {
+		for _, a := range turn {
+			if a.Type != "ban" || !a.Completed || a.ChampionID == 0 {
+				continue
+			}
+			if a.IsAllyAction {
+				mine = append(mine, a.ChampionID)
+			} else if revealed {
+				theirs = append(theirs, a.ChampionID)
+			}
+		}
+	}
+	return mine, theirs
 }
 
 // ChampSelectSession returns the current champ select, or ErrNotFound
