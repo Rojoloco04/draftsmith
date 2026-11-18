@@ -5,7 +5,9 @@ package watch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/rojoloco04/draftsmith/internal/lcu"
@@ -14,6 +16,7 @@ import (
 // Client is the part of *lcu.Client the watcher uses.
 type Client interface {
 	GameflowPhase(ctx context.Context) (string, error)
+	ChampSelectSession(ctx context.Context) (lcu.Session, error)
 }
 
 // Watcher polls the client's gameflow phase, reconnecting whenever the
@@ -25,17 +28,26 @@ type Watcher struct {
 	// OnPhase is called on every phase change, including "" when the client
 	// goes away.
 	OnPhase func(phase string)
+	// OnSession is called with each champ select update that changes
+	// anything but the timer.
+	OnSession func(lcu.Session)
+	// Name turns a champion id into a name for logs; nil logs ids.
+	Name func(id int) string
 
-	// Poll is how often the phase is checked; Retry how often to look for
-	// a client that isn't running.
-	Poll, Retry time.Duration
+	// Poll is how often the phase is checked outside champ select,
+	// ChampPoll how often the session is read during it, and Retry how
+	// often to look for a client that isn't running.
+	Poll, ChampPoll, Retry time.Duration
 }
 
 // Run watches until ctx is done.
 func (w *Watcher) Run(ctx context.Context) error {
-	poll, retry := w.Poll, w.Retry
+	poll, champPoll, retry := w.Poll, w.ChampPoll, w.Retry
 	if poll <= 0 {
 		poll = 2 * time.Second
+	}
+	if champPoll <= 0 {
+		champPoll = time.Second
 	}
 	if retry <= 0 {
 		retry = 5 * time.Second
@@ -43,6 +55,7 @@ func (w *Watcher) Run(ctx context.Context) error {
 	var (
 		c       Client
 		phase   string
+		lastSel string // last champ select summary, to report changes only
 		lastErr string // last discovery problem logged, to log each once
 		// failed are the credentials that last stopped working. Finding
 		// them again (a stale lockfile, or a client still starting up) is
@@ -116,10 +129,78 @@ func (w *Watcher) Run(ctx context.Context) error {
 			quiet, failed = false, lcu.Credentials{}
 		}
 		setPhase(p)
-		if !sleep(ctx, poll) {
+		wait := poll
+		if p == lcu.PhaseChampSelect {
+			wait = champPoll
+			sess, err := c.ChampSelectSession(ctx)
+			switch {
+			case err == nil:
+				if sum := w.summarize(sess); sum != lastSel {
+					lastSel = sum
+					w.Log.Printf("champ select: %s", sum)
+					if w.OnSession != nil {
+						w.OnSession(sess)
+					}
+				}
+			case errors.Is(err, lcu.ErrNotFound): // champ select just ended
+			case ctx.Err() != nil:
+				return nil
+			default:
+				w.Log.Printf("champ select session: %v", err)
+			}
+		} else {
+			lastSel = ""
+		}
+		if !sleep(ctx, wait) {
 			return nil
 		}
 	}
+}
+
+// summarize describes a champ select in one line: phase, my slot, both
+// teams' champions and the bans. It leaves out the timer's countdown so
+// that it only changes when something happens.
+func (w *Watcher) summarize(s lcu.Session) string {
+	name := func(id int) string {
+		if id == 0 {
+			return "-"
+		}
+		if w.Name != nil {
+			if n := w.Name(id); n != "" {
+				return n
+			}
+		}
+		return fmt.Sprintf("#%d", id)
+	}
+	team := func(ms []lcu.Member) string {
+		var parts []string
+		for _, m := range ms {
+			p := name(m.ChampionID)
+			if m.ChampionID == 0 && m.ChampionPickIntent != 0 {
+				p = name(m.ChampionPickIntent) + "?"
+			}
+			if m.AssignedPosition != "" {
+				p = m.AssignedPosition + " " + p
+			}
+			if m.CellID == s.LocalPlayerCellID { // cell ids are unique across both teams
+				p = "[" + p + "]"
+			}
+			parts = append(parts, p)
+		}
+		return strings.Join(parts, ", ")
+	}
+	ids := func(xs []int) string {
+		var parts []string
+		for _, id := range xs {
+			parts = append(parts, name(id))
+		}
+		if len(parts) == 0 {
+			return "-"
+		}
+		return strings.Join(parts, " ")
+	}
+	return fmt.Sprintf("%s | us: %s | them: %s | bans: %s / %s",
+		s.Timer.Phase, team(s.MyTeam), team(s.TheirTeam), ids(s.Bans.MyTeamBans), ids(s.Bans.TheirTeamBans))
 }
 
 // sleep waits for d, returning false if ctx ends first.
