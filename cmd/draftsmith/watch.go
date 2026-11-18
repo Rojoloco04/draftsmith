@@ -13,18 +13,25 @@ import (
 	"time"
 
 	"github.com/rojoloco04/draftsmith/internal/db"
+	"github.com/rojoloco04/draftsmith/internal/draft"
 	"github.com/rojoloco04/draftsmith/internal/lcu"
 	"github.com/rojoloco04/draftsmith/internal/meta"
+	"github.com/rojoloco04/draftsmith/internal/opgg"
+	"github.com/rojoloco04/draftsmith/internal/riot"
 	"github.com/rojoloco04/draftsmith/internal/watch"
 )
 
-// cmdWatch follows the local League client. For now it logs gameflow phase
-// changes and champ select as it happens; suggestions come next.
+// cmdWatch follows the local League client and, in champ select, logs the
+// draft and suggestions from my pool with OP.GG rune pages. It only reads
+// the client; picking is always up to me.
 func cmdWatch(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("watch", flag.ExitOnError)
-	data := fs.String("data", env("DRAFTSMITH_DATA", "data"), "archive directory (for champion names)")
+	data := fs.String("data", env("DRAFTSMITH_DATA", "data"), "archive directory (for your games and the OP.GG cache)")
 	dir := fs.String("league-dir", env("DRAFTSMITH_LEAGUE_DIR", ""), "League install directory (default: the standard install location)")
 	poll := fs.Duration("poll", 2*time.Second, "how often to check the client's state")
+	minGames := fs.Int("min-games", 2, "suggest only champions with at least this many games in your lane")
+	noSuggest := fs.Bool("no-suggest", false, "only log the draft, without suggestions")
+	opggEndpoint := fs.String("opgg-endpoint", opgg.DefaultEndpoint, "OP.GG MCP endpoint")
 	capture := fs.String("capture", "", "write each champ select update (allowed fields only) and the payload's key names to this directory")
 	fs.Parse(args)
 
@@ -37,9 +44,39 @@ func cmdWatch(ctx context.Context, args []string) error {
 		Discover: func(ctx context.Context) (lcu.Credentials, error) { return lcu.Discover(ctx, dirs) },
 		Connect:  func(c lcu.Credentials) watch.Client { return lcu.New(c) },
 		Log:      logger,
-		Name:     championNames(ctx, *data, logger),
 		Poll:     *poll,
 	}
+
+	// The index holds my games and the OP.GG cache. Without one, watch
+	// still follows the draft, with champion ids and no suggestions.
+	path := filepath.Join(*data, db.FileName)
+	if _, err := os.Stat(path); err != nil {
+		logger.Printf("no index at %s (run `draftsmith sync` first); showing the draft without suggestions", path)
+	} else {
+		d, err := db.Open(ctx, path)
+		if err != nil {
+			return err
+		}
+		defer d.Close()
+		svc := meta.New(d, *opggEndpoint)
+		names := championTable(ctx, svc, logger)
+		if names != nil {
+			w.Name = func(id int) string { return names.byID[id].Name }
+		}
+		if !*noSuggest {
+			if live, err := newLive(ctx, d, svc, names, *minGames, logger); err != nil {
+				logger.Printf("suggestions off: %v", err)
+			} else {
+				w.OnSession = live.Update
+				w.OnPhase = func(p string) {
+					if p != lcu.PhaseChampSelect {
+						live.Reset()
+					}
+				}
+			}
+		}
+	}
+
 	if *capture != "" {
 		if err := os.MkdirAll(*capture, 0o755); err != nil {
 			return err
@@ -51,31 +88,58 @@ func cmdWatch(ctx context.Context, args []string) error {
 	return w.Run(ctx)
 }
 
-// championNames maps champion ids to names through OP.GG's champion table
-// (cached for a week in the index). Without it, logs show ids.
-func championNames(ctx context.Context, data string, logger *log.Logger) func(int) string {
-	path := filepath.Join(data, db.FileName)
-	if _, err := os.Stat(path); err != nil {
-		return nil
-	}
-	d, err := db.Open(ctx, path)
-	if err != nil {
-		logger.Printf("champion names: %v", err)
-		return nil
-	}
-	defer d.Close()
+// champions indexes OP.GG's champion table by Riot id and key.
+type champions struct {
+	byID  map[int]meta.Champion
+	byKey map[string]meta.Champion
+}
+
+// championTable loads OP.GG's champion table (cached for a week), or nil
+// if it can't, in which case logs show champion ids.
+func championTable(ctx context.Context, svc *meta.Service, logger *log.Logger) *champions {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	champs, err := meta.New(d, "").Champions(ctx)
+	list, err := svc.Champions(ctx)
 	if err != nil {
 		logger.Printf("champion names unavailable, showing ids: %v", err)
 		return nil
 	}
-	names := map[int]string{}
-	for _, c := range champs.List {
-		names[c.ID] = c.Name
+	c := &champions{byID: map[int]meta.Champion{}, byKey: map[string]meta.Champion{}}
+	for _, ch := range list.List {
+		c.byID[ch.ID] = ch
+		c.byKey[ch.Key] = ch
 	}
-	return func(id int) string { return names[id] }
+	return c
+}
+
+// newLive sets up suggestions from my solo queue games, and starts
+// fetching OP.GG matchups for my main lane in the background.
+func newLive(ctx context.Context, d *db.DB, svc *meta.Service, champs *champions, minGames int, logger *log.Logger) (*draft.Live, error) {
+	if champs == nil {
+		return nil, fmt.Errorf("no champion table to read the draft with")
+	}
+	games, err := d.Games(ctx, db.GameFilter{Queue: riot.QueueSoloDuo, NoRemakes: true})
+	if err != nil {
+		return nil, err
+	}
+	if len(games) == 0 {
+		return nil, fmt.Errorf("no solo queue games indexed")
+	}
+	wins := 0
+	for _, g := range games {
+		if g.Win {
+			wins++
+		}
+	}
+	live := &draft.Live{
+		Meta: svc, Games: games, Base: float64(wins) / float64(len(games)), MinGames: minGames,
+		Key:  func(id int) string { return champs.byID[id].Key },
+		Name: func(key string) string { return champs.byKey[key].Name },
+		Log:  logger,
+	}
+	live.Start(ctx)
+	live.Warm("")
+	return live, nil
 }
 
 // capturingClient records every champ select read for checking field names

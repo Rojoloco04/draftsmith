@@ -19,14 +19,23 @@ type testOPGG struct {
 	old bool
 }
 
-func (f testOPGG) CallTool(_ context.Context, name string, _ map[string]any) (opgg.CallResult, error) {
+func (f testOPGG) CallTool(_ context.Context, name string, args map[string]any) (opgg.CallResult, error) {
 	file := map[string]string{
 		"lol_list_lane_meta_champions": "tierlist_roles.txt",
 		"lol_list_champions":           "champions.txt",
 		"lol_get_champion_analysis":    "analysis_ahri_mid.txt",
+		"lol_get_lane_matchup_guide":   "matchup_galio_mirror_mid.json",
 	}[name]
 	if f.old && name == "lol_list_lane_meta_champions" {
 		file = "tierlist_all.txt"
+	}
+	if name == "lol_get_lane_matchup_guide" {
+		if args["my_champion"] != "GALIO" {
+			return opgg.CallResult{IsError: true, Text: "Invalid position or champion specified"}, nil
+		}
+		if args["opponent_champion"] == "KATARINA" {
+			file = "matchup_galio_katarina_mid.json"
+		}
 	}
 	b, err := os.ReadFile("../opgg/testdata/" + file)
 	if err != nil {

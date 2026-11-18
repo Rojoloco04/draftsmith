@@ -28,9 +28,11 @@ Phase 2 (branch `phase2-meta`, commits `f40577c`, `8c782f3`, `c40be78`; see the 
 
 The Phase 2 leftover (pool vs meta in the markdown `report`) is done on `main`: `meta.NewCacheOnly` serves whatever is cached however old and never dials OP.GG (it has no client, so a stray call would panic rather than hit the network), and `report` renders `meta.PoolMarkdown` after the champion pool, leaving the section out when no tier list is cached or there's no index yet (it won't create one).
 
-Phase 3 is in progress on branch `phase3-watch` (see the Phase 3 section): client discovery, gameflow polling and reading champ select are done and checked against a real ranked champ select.
+The dashboard's Refresh button (sync now, reload when done) was merged into `main` on 2026-11-17 (not pushed).
 
-**Next up:** Phase 3 suggestions. Score my pool for my assigned position (adjusted win rate and games from the index, OP.GG tier from the cached tier list, OP.GG counters vs the visible enemy laner once they're locked, team damage mix), log the top 3 with one-line reasons in `watch`, then push to the dashboard's champ select page. Enemy positions are blank in ranked, so the "enemy laner" has to be inferred (e.g. from OP.GG's position data for each enemy champion) or left out until it's clear.
+Phase 3 is in progress on branch `phase3-watch` (rebased on `main`; see the Phase 3 section): client discovery, gameflow polling, reading champ select (checked against a real ranked champ select), lane odds for the enemy team, and suggestions with rune pages logged by `watch`.
+
+**Next up:** the dashboard's champ select page, fed live by `watch` (SSE), then the overlay: a borderless always-on-top window docked to the League client that shows that page during champ select only. See "Overlay" in the Phase 3 section. Team comp gaps (damage mix, frontline) are not in the score yet.
 
 Handoff notes (things a new session would otherwise rediscover):
 
@@ -161,6 +163,20 @@ Real client findings:
 - `championId` is the hover during a player's pick turn and the pick after it; locked in means a completed `pick` action for that cell (`Session.Locked`). `championPickIntent` is the hover before the turn. Enemy hovers during their turn are visible, as they are in the client.
 - `myTeam` is reordered mid draft, so sort by `assignedPosition` (`top`, `jungle`, `middle`, `bottom`, `utility`) for display. `theirTeam[].assignedPosition` is always `""` in ranked.
 - Other non-identity fields worth having later: `myTeam[].isAutofilled` (now read), `queueId` (now read), `actions[][].pickTurn`, `timer.isInfinite`, `trades`/`positionSwaps`/`pickOrderSwaps` (cell + state only).
+
+Suggestions (`internal/draft`, 2026-11-17):
+
+- **Decided: no Jev (or any LLM) in the loop.** The user asked about TypeSafe's Jev decision model. The probabilities it would guess are already in OP.GG's data, and exact arithmetic over them is offline, instant, deterministic and explainable; Jev is paid, networked, can vary between identical calls, and returns no reasons. Revisit only for something genuinely fuzzy that the data can't answer.
+- **Lane odds** (`draft.Roles`): all 120 lane assignments for the enemy team, each weighted by the product of the champions' `role_rate` in their lanes (P(lane | champion) and P(champion | lane) rank assignments the same). Lanes the tier list cuts off share whatever `role_rate` the listed lanes leave, at least 0.5% each. Open slots fit any lane. Enemy hovers count as picks (the client shows them).
+- **Score** (`draft.Suggest`), for each champion with 2+ of my solo queue games in my lane that isn't banned or locked: my record blended with 10 games at (my base + its OP.GG win rate − 50%), then shifted in log odds by Σ P(enemy is my laner) × (logit matchup win rate − logit its usual win rate). Matchups come from OP.GG's table blended with 500 games at its usual rate. Unpicked enemies count as an average opponent. Teammates' hovers are flagged, not excluded.
+- **OP.GG matchups** (`meta.Matchup`, `lol_get_lane_matchup_guide`, plain JSON): `data.counters` is the champion's whole matchup table in that lane (53 rows for Galio mid), the same whatever opponent is asked, and `win` is the table owner's wins (Galio into Katarina 2191 of 4213; Katarina's table has Galio at 2022 of 4213). So one mirror request per pool champion (`MatchupTable`, smallest response, no runes) gives every matchup. Runes in the guide are matchup specific and come with names. `opponent_champion: NONE` is an error. Calls take 1.5-2s, so `watch` prefetches my main lane's tables at start and fetches everything else in the background.
+- **Runes**: the top matchup page when my laner is 50%+ likely, else the champion's usual page from champion analysis (which now also asks for rune names; its cache key has a version, `analysisVersion`, so older copies are re-fetched). Tree and stat shard names are a small fixed table in `meta`. Nothing is imported into the client yet; that stays button-only.
+- `watch` output: the ranking as a block when it changes, then one line per rune page as it arrives. After I lock in, only my champion's page for the likely matchup.
+
+Overlay (asked 2026-11-17, not built):
+
+- Plan: a separate borderless, always-on-top window (WebView2, Windows only) that shows the dashboard's champ select page, positioned against the League client's window and following it, shown only during ChampSelect and hidden otherwise. Quick version first: the champ select page in an Edge `--app=` window, kept on top by the user.
+- Never inject into or modify the client's own UI (client plugin loaders): that's outside what Riot allows and risks the account. A separate window doesn't touch the client.
 
 Plan from here:
 

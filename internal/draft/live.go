@@ -1,0 +1,447 @@
+package draft
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"strings"
+	"sync"
+
+	"github.com/rojoloco04/draftsmith/internal/analysis"
+	"github.com/rojoloco04/draftsmith/internal/lcu"
+	"github.com/rojoloco04/draftsmith/internal/meta"
+)
+
+// Source is the OP.GG data Live uses; *meta.Service implements it.
+type Source interface {
+	TierList(ctx context.Context) (meta.TierList, error) // read once, by Start
+	MatchupTable(ctx context.Context, key, position string) ([]meta.Counter, error)
+	Matchup(ctx context.Context, key, opponent, position string) (meta.Matchup, error)
+	Analysis(ctx context.Context, key, position string) (meta.Analysis, error)
+}
+
+// Top is how many suggestions Live shows.
+const Top = 3
+
+// LikelyOdds is how sure Live must be of my lane opponent to show the rune
+// page for that matchup rather than the champion's usual one.
+const LikelyOdds = 0.5
+
+// Live turns champ select updates into suggestions. Update scores from
+// whatever is cached and returns at once; missing OP.GG data is fetched in
+// the background, and the suggestions are logged again when it arrives.
+// It only reads and logs: it never acts in the client.
+type Live struct {
+	Meta     Source
+	Games    []analysis.Game // my games, for my record per champion
+	Base     float64         // my overall win rate
+	MinGames int
+	// Key maps a champion id to its Riot key ("" if unknown); Name a Riot
+	// key to a display name (nil shows keys).
+	Key  func(id int) string
+	Name func(key string) string
+	Log  *log.Logger
+
+	rmu     sync.Mutex // serializes refresh, so "changed" compares in order
+	mu      sync.Mutex
+	ctx     context.Context
+	tl      meta.TierList
+	tlErr   error
+	sess    lcu.Session
+	have    bool
+	tables  map[string][]meta.Counter // key/position
+	runes   map[string]runeResult     // key/opponent/position
+	pending map[string]bool
+	queue   chan func()
+	last    view
+}
+
+// view is what Live shows for one champ select state: a header, and
+// for each suggestion (or my locked pick) its reason and rune page.
+type view struct {
+	head  string
+	items []viewItem
+}
+
+type viewItem struct {
+	name, reason, runes string
+}
+
+const loadingRunes = "(loading from OP.GG)"
+
+// ranking is the view without rune pages: when it changes, the whole view
+// is logged again; when only rune pages arrive, just those are.
+func (v view) ranking() string {
+	var b strings.Builder
+	b.WriteString(v.head)
+	for _, it := range v.items {
+		b.WriteString("\n" + it.name + "\t" + it.reason)
+	}
+	return b.String()
+}
+
+func (v view) String() string {
+	if len(v.items) == 1 && v.items[0].reason == "" { // locked in
+		return v.head + "; runes " + v.items[0].runes
+	}
+	var b strings.Builder
+	b.WriteString(v.head)
+	for i, it := range v.items {
+		fmt.Fprintf(&b, "\n  %d. %s\n     runes %s", i+1, it.reason, it.runes)
+	}
+	return b.String()
+}
+
+type runeResult struct {
+	page meta.RunePage
+	vs   string // the opponent the page is for, "" for the champion's usual page
+	ok   bool
+}
+
+// Start loads the tier list and begins the background fetcher; it stops
+// with ctx. The tier list is read once here, so champ select updates never
+// wait on OP.GG.
+func (l *Live) Start(ctx context.Context) {
+	tl, err := l.Meta.TierList(ctx)
+	l.mu.Lock()
+	l.tl, l.tlErr = tl, err
+	l.ctx = ctx
+	l.tables = map[string][]meta.Counter{}
+	l.runes = map[string]runeResult{}
+	l.pending = map[string]bool{}
+	l.queue = make(chan func(), 64)
+	l.mu.Unlock()
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case f := <-l.queue:
+				f()
+			}
+		}
+	}()
+}
+
+// Warm fetches matchup tables for my pool in position ("" for the lane I
+// play most) ahead of champ select, so the first suggestions don't wait on
+// OP.GG.
+func (l *Live) Warm(position string) {
+	if position == "" {
+		position = l.mainPosition()
+	}
+	for _, c := range l.pool(position) {
+		l.fetchTable(c, position)
+	}
+}
+
+// Reset forgets the last champ select, so the next one logs from scratch.
+func (l *Live) Reset() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.have, l.last = false, view{}
+}
+
+// Update handles a champ select update.
+func (l *Live) Update(s lcu.Session) {
+	l.mu.Lock()
+	l.sess, l.have = s, true
+	l.mu.Unlock()
+	l.refresh()
+}
+
+// refresh scores the current session and logs the result if it changed.
+func (l *Live) refresh() {
+	l.rmu.Lock()
+	defer l.rmu.Unlock()
+	l.mu.Lock()
+	s, have := l.sess, l.have
+	l.mu.Unlock()
+	if !have || l.ctx == nil {
+		return
+	}
+	v := l.render(s)
+	l.mu.Lock()
+	prev := l.last
+	l.last = v
+	l.mu.Unlock()
+	switch {
+	case v.head == "":
+	case v.ranking() != prev.ranking():
+		l.Log.Print(v)
+	default:
+		for i, it := range v.items {
+			if it.runes != prev.items[i].runes && it.runes != loadingRunes {
+				l.Log.Printf("  %s runes %s", it.name, it.runes)
+			}
+		}
+	}
+}
+
+// render works out the suggestions for s, queuing fetches for anything
+// missing.
+func (l *Live) render(s lcu.Session) view {
+	me, ok := s.Me()
+	if !ok {
+		return view{}
+	}
+	position := clientPosition(me.AssignedPosition)
+	if position == "" {
+		position = l.mainPosition()
+	}
+	if position == "" {
+		return view{head: "suggestions: no lane assigned and no games to guess one from"}
+	}
+	l.mu.Lock()
+	tl, err := l.tl, l.tlErr
+	l.mu.Unlock()
+	if err != nil {
+		return view{head: "suggestions: no OP.GG tier list: " + err.Error()}
+	}
+
+	var enemies []string
+	for _, m := range s.TheirTeam {
+		enemies = append(enemies, l.key(m.ChampionID)) // a hover shows in the client too
+	}
+	odds := Roles(tl, enemies, nil)
+
+	var taken, hovered []string
+	mine, theirs := s.BanList()
+	for _, id := range append(mine, theirs...) {
+		taken = append(taken, l.key(id))
+	}
+	for _, m := range append(append([]lcu.Member(nil), s.MyTeam...), s.TheirTeam...) {
+		switch {
+		case m.ChampionID != 0 && s.Locked(m.CellID):
+			taken = append(taken, l.key(m.ChampionID))
+		case m.CellID == me.CellID || m.Team != me.Team:
+		case m.ChampionID != 0:
+			hovered = append(hovered, l.key(m.ChampionID))
+		case m.ChampionPickIntent != 0:
+			hovered = append(hovered, l.key(m.ChampionPickIntent))
+		}
+	}
+
+	// Once I've locked in, only my champion's runes matter.
+	if me.ChampionID != 0 && s.Locked(me.CellID) {
+		champ := l.key(me.ChampionID)
+		sug := Suggest(Input{Position: position, Games: l.Games, Base: l.Base, TierList: tl, Odds: odds,
+			Matchups: l.tablesFor([]string{champ}, position)})
+		var forMe *Suggestion
+		for i := range sug {
+			if norm(sug[i].Champion) == norm(champ) {
+				forMe = &sug[i]
+			}
+		}
+		opp := ""
+		if forMe != nil {
+			opp, _ = forMe.LikelyOpponent(LikelyOdds)
+		} else {
+			opp = likelyLaner(odds, position)
+		}
+		return view{
+			head:  fmt.Sprintf("locked in %s (%s)", l.name(champ), meta.PositionName(position)),
+			items: []viewItem{{name: l.name(champ), runes: l.runeLine(champ, opp, position)}},
+		}
+	}
+
+	var pool []string
+	gone := keySet(taken)
+	for _, c := range l.pool(position) {
+		if !gone[norm(c)] {
+			pool = append(pool, c)
+		}
+	}
+	sug := Suggest(Input{
+		Position: position, Games: l.Games, Base: l.Base, MinGames: l.MinGames, TierList: tl, Odds: odds,
+		Matchups: l.tablesFor(pool, position), Taken: taken, Hovered: hovered,
+	})
+	if len(sug) == 0 {
+		return view{head: fmt.Sprintf("suggestions (%s): none; no champion with %d+ games there is still available", meta.PositionName(position), max(l.MinGames, 1))}
+	}
+	v := view{head: fmt.Sprintf("suggestions (%s):", meta.PositionName(position))}
+	for i, sg := range sug {
+		if i == Top {
+			break
+		}
+		opp, _ := sg.LikelyOpponent(LikelyOdds)
+		v.items = append(v.items, viewItem{name: l.name(sg.Champion), reason: sg.Reason(position, l.Name), runes: l.runeLine(sg.Champion, opp, position)})
+	}
+	return v
+}
+
+// runeLine describes the rune page for champ into opp ("" if unknown),
+// queuing the fetch if it isn't here yet.
+func (l *Live) runeLine(champ, opp, position string) string {
+	k := champ + "/" + opp + "/" + position
+	l.mu.Lock()
+	r, ok := l.runes[k]
+	l.mu.Unlock()
+	if !ok {
+		l.fetchRunes(champ, opp, position)
+		return loadingRunes
+	}
+	if !r.ok {
+		return "(none on OP.GG)"
+	}
+	if r.vs != "" {
+		return "vs " + l.name(r.vs) + ": " + r.page.String()
+	}
+	return "(usual page): " + r.page.String()
+}
+
+func (l *Live) tablesFor(champs []string, position string) map[string][]meta.Counter {
+	out := map[string][]meta.Counter{}
+	for _, c := range champs {
+		l.mu.Lock()
+		t, ok := l.tables[c+"/"+position]
+		l.mu.Unlock()
+		if ok {
+			out[c] = t
+		} else {
+			l.fetchTable(c, position)
+		}
+	}
+	return out
+}
+
+func (l *Live) fetchTable(champ, position string) {
+	k := "table/" + champ + "/" + position
+	l.enqueue(k, func() {
+		t, err := l.Meta.MatchupTable(l.ctx, champ, position)
+		if err != nil && !errors.Is(err, meta.ErrNoData) && l.ctx.Err() == nil {
+			l.Log.Printf("OP.GG matchups for %s %s: %v", l.name(champ), meta.PositionName(position), err)
+		}
+		l.mu.Lock()
+		l.tables[champ+"/"+position] = t // nil on failure: scored without matchups, not retried
+		l.mu.Unlock()
+	})
+}
+
+func (l *Live) fetchRunes(champ, opp, position string) {
+	k := "runes/" + champ + "/" + opp + "/" + position
+	l.enqueue(k, func() {
+		r := runeResult{}
+		if opp != "" {
+			if m, err := l.Meta.Matchup(l.ctx, champ, opp, position); err == nil && len(m.Runes) > 0 {
+				r = runeResult{page: m.Runes[0], vs: opp, ok: true}
+			}
+		}
+		if !r.ok {
+			if a, err := l.Meta.Analysis(l.ctx, champ, position); err == nil && len(a.Runes.Primary) > 0 {
+				r = runeResult{page: a.Runes, ok: true}
+			} else if err != nil && !errors.Is(err, meta.ErrNoData) && l.ctx.Err() == nil {
+				l.Log.Printf("OP.GG runes for %s %s: %v", l.name(champ), meta.PositionName(position), err)
+			}
+		}
+		l.mu.Lock()
+		l.runes[champ+"/"+opp+"/"+position] = r
+		l.mu.Unlock()
+	})
+}
+
+// enqueue runs f in the background once per key, then refreshes the
+// suggestions with what it fetched.
+func (l *Live) enqueue(key string, f func()) {
+	l.mu.Lock()
+	if l.pending == nil || l.pending[key] {
+		l.mu.Unlock()
+		return
+	}
+	l.pending[key] = true
+	q := l.queue
+	l.mu.Unlock()
+	job := func() {
+		f()
+		l.refresh()
+	}
+	select {
+	case q <- job:
+	default: // queue full: drop it and allow a later retry
+		l.mu.Lock()
+		delete(l.pending, key)
+		l.mu.Unlock()
+	}
+}
+
+// pool is every champion I've played MinGames+ times in position.
+func (l *Live) pool(position string) []string {
+	role := meta.Role(position)
+	n := map[string]int{}
+	var order []string
+	for _, g := range l.Games {
+		if g.Remake || g.Role != role {
+			continue
+		}
+		if n[g.Champion] == 0 {
+			order = append(order, g.Champion)
+		}
+		n[g.Champion]++
+	}
+	var out []string
+	for _, c := range order {
+		if n[c] >= max(l.MinGames, 1) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// mainPosition is the lane I've played most, for blind pick where the
+// client assigns none.
+func (l *Live) mainPosition() string {
+	n := map[string]int{}
+	best, bn := "", 0
+	for _, g := range l.Games {
+		if g.Remake {
+			continue
+		}
+		n[g.Role]++
+		if n[g.Role] > bn {
+			best, bn = g.Role, n[g.Role]
+		}
+	}
+	return meta.Position(best)
+}
+
+func likelyLaner(o RoleOdds, position string) string {
+	best, bp := "", LikelyOdds
+	for i, p := range o.Lane(position) {
+		if o.Champions[i] != "" && p >= bp {
+			best, bp = o.Champions[i], p
+		}
+	}
+	return best
+}
+
+func (l *Live) key(id int) string {
+	if id == 0 || l.Key == nil {
+		return ""
+	}
+	return l.Key(id)
+}
+
+func (l *Live) name(key string) string {
+	if l.Name != nil {
+		if n := l.Name(key); n != "" {
+			return n
+		}
+	}
+	return key
+}
+
+// clientPosition maps the client's assignedPosition to OP.GG's position.
+func clientPosition(p string) string {
+	switch p {
+	case "top", "jungle":
+		return p
+	case "middle":
+		return "mid"
+	case "bottom":
+		return "adc"
+	case "utility":
+		return "support"
+	}
+	return ""
+}

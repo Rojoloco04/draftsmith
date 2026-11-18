@@ -233,14 +233,16 @@ func (c Counter) WinRate() float64 {
 // RunePage is OP.GG's most played rune page: the ids an LCU rune page
 // needs.
 type RunePage struct {
-	PrimaryStyle int     `json:"primary_page_id"`
-	Primary      []int   `json:"primary_rune_ids"`
-	SubStyle     int     `json:"secondary_page_id"`
-	Sub          []int   `json:"secondary_rune_ids"`
-	StatMods     []int   `json:"stat_mod_ids"`
-	Play         int     `json:"play"`
-	Win          int     `json:"win"`
-	PickRate     float64 `json:"pick_rate"`
+	PrimaryStyle int      `json:"primary_page_id"`
+	Primary      []int    `json:"primary_rune_ids"`
+	PrimaryNames []string `json:"primary_rune_names"`
+	SubStyle     int      `json:"secondary_page_id"`
+	Sub          []int    `json:"secondary_rune_ids"`
+	SubNames     []string `json:"secondary_rune_names"`
+	StatMods     []int    `json:"stat_mod_ids"`
+	Play         int      `json:"play"`
+	Win          int      `json:"win"`
+	PickRate     float64  `json:"pick_rate"`
 }
 
 // Analysis is OP.GG's view of one champion in one position.
@@ -266,6 +268,11 @@ type Analysis struct {
 
 // ErrNoData means OP.GG has no stats for that champion in that position.
 var ErrNoData = errors.New("OP.GG has no data for that champion and position")
+
+// analysisVersion is part of the analysis cache key. Bump it when the
+// requested fields change, so copies cached without them are fetched again
+// rather than served for a day. v2 added rune names.
+const analysisVersion = "v2"
 
 // Analysis returns OP.GG's stats, counters and runes for a champion (Riot
 // key) in a position, for the Emerald+ bracket.
@@ -304,13 +311,13 @@ func (s *Service) Analysis(ctx context.Context, key, position string) (Analysis,
 	var resp response
 	champ := strings.ToUpper(normalize(key))
 	fr, err := s.get(ctx, request{
-		key:  "analysis/" + champ + "/" + position + "/" + Bracket,
+		key:  "analysis/" + champ + "/" + position + "/" + Bracket + "/" + analysisVersion,
 		tool: "lol_get_champion_analysis",
 		args: map[string]any{
 			"game_mode": "ranked", "champion": champ, "position": position, "tier": Bracket,
 			"desired_output_fields": []string{
 				"data.summary.average_stats.{play,win_rate,pick_rate,ban_rate,tier,rank}",
-				"data.runes.{primary_page_id,primary_rune_ids[],secondary_page_id,secondary_rune_ids[],stat_mod_ids[],play,win,pick_rate}",
+				"data.runes.{primary_page_id,primary_rune_ids[],primary_rune_names[],secondary_page_id,secondary_rune_ids[],secondary_rune_names[],stat_mod_ids[],play,win,pick_rate}",
 				"data.strong_counters[].{champion_name,play,win}",
 				"data.weak_counters[].{champion_name,play,win}",
 				"data.damage_type",

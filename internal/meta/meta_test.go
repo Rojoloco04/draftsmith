@@ -323,7 +323,7 @@ func TestAnalysis(t *testing.T) {
 	if args := f.args[0]; args["champion"] != "AHRI" || args["tier"] != Bracket || args["position"] != "mid" {
 		t.Errorf("args %v", args)
 	}
-	if e, ok := cache["analysis/AHRI/mid/emerald_plus"]; !ok || e.Patch != "16.22" {
+	if e, ok := cache["analysis/AHRI/mid/emerald_plus/"+analysisVersion]; !ok || e.Patch != "16.22" {
 		t.Errorf("cache entry %+v", e)
 	}
 	if _, err := s.Analysis(context.Background(), "Ahri", "middle"); err == nil {
