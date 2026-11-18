@@ -331,3 +331,27 @@ func TestRanksAndSchemaRebuild(t *testing.T) {
 		t.Errorf("other player's index has %d games", len(games))
 	}
 }
+
+func TestMetaCacheSurvivesRebuild(t *testing.T) {
+	ctx := context.Background()
+	d, s := setup(t)
+	if _, err := d.MetaEntry(ctx, "tierlist"); err != ErrNotFound {
+		t.Fatalf("empty cache: got %v, want ErrNotFound", err)
+	}
+	at := time.Date(2026, 11, 18, 2, 0, 0, 0, time.UTC)
+	for _, body := range []string{"first", "second"} {
+		if err := d.PutMetaEntry(ctx, MetaEntry{Key: "tierlist", FetchedAt: at, Patch: "16.22", Body: body}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := d.Rebuild(ctx, s, fixture.MePUUID); err != nil {
+		t.Fatal(err)
+	}
+	e, err := d.MetaEntry(ctx, "tierlist")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !e.FetchedAt.Equal(at) || e.Patch != "16.22" || e.Body != "second" {
+		t.Errorf("got %+v", e)
+	}
+}

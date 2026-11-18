@@ -67,6 +67,8 @@ Required: `position` (`none` infers the main lane), `my_champion`, `opponent_cha
 
 `data.champions[].{champion_id,key,name}`. `key` is Riot's `championName` (`MonkeyKing`, `Leblanc`, `TwistedFate`), `name` is the display name the tier list uses. Fetch once per patch.
 
+The table also lists mode variants with ids from 60001 and keys like `Jade_Annie` that share display names with the real champions (84 of 257 rows on 2026-11-18). Skip any key containing `_`; Riot keys never have one.
+
 ### `lol_get_summoner_profile`
 
 Required: `game_name`, `tag_line`, `region` (e.g. `NA`), `desired_output_fields`. Includes `data.summoner.lp_histories[]` (LP over time) and per-champion season stats. The Riot API already gives me everything I need for my own account, so this is optional: at most an LP history backfill for days before Draftsmith started taking snapshots. Never call it for anyone else.

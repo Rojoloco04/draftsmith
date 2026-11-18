@@ -57,12 +57,37 @@ func Parse(text string) (any, error) {
 	return v, nil
 }
 
+// FieldError reports requested fields OP.GG no longer has. The server skips
+// them and says so in a "_field_diagnostics" value instead of failing, which
+// would otherwise look like an empty result.
+type FieldError struct {
+	Fields []string
+}
+
+func (e *FieldError) Error() string {
+	return "opgg: response is missing requested fields " + strings.Join(e.Fields, ", ") + " (the tool's schema changed?)"
+}
+
 // Decode parses a tool response and stores it in v the way encoding/json
 // would, so typed structs only need json tags matching OP.GG's field names.
+// It returns a *FieldError if the server skipped any requested field.
 func Decode(text string, v any) error {
 	tree, err := Parse(text)
 	if err != nil {
 		return err
+	}
+	if m, ok := tree.(map[string]any); ok {
+		if diag, ok := m["_field_diagnostics"].(map[string]any); ok {
+			fe := &FieldError{}
+			list, _ := diag["unmatched_fields"].([]any)
+			for _, f := range list {
+				fe.Fields = append(fe.Fields, fmt.Sprint(f))
+			}
+			if len(fe.Fields) == 0 {
+				fe.Fields = []string{"(unknown)"}
+			}
+			return fe
+		}
 	}
 	b, err := json.Marshal(tree)
 	if err != nil {

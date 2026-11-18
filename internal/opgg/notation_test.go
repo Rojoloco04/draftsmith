@@ -1,6 +1,7 @@
 package opgg
 
 import (
+	"errors"
 	"os"
 	"reflect"
 	"strings"
@@ -226,5 +227,14 @@ func TestParseFieldDiagnostics(t *testing.T) {
 	diag, _ := got.(map[string]any)["_field_diagnostics"].(map[string]any)
 	if !reflect.DeepEqual(diag["unmatched_fields"], []any{"data.trends.version"}) || !strings.Contains(diag["hint"].(string), `"[]"`) {
 		t.Errorf("diagnostics %#v", diag)
+	}
+}
+
+func TestDecodeFieldError(t *testing.T) {
+	var v map[string]any
+	err := Decode(readTestdata(t, "analysis_diagnostics.txt"), &v)
+	var fe *FieldError
+	if !errors.As(err, &fe) || !reflect.DeepEqual(fe.Fields, []string{"data.trends.version"}) {
+		t.Errorf("got %v", err)
 	}
 }
