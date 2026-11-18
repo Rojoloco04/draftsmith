@@ -41,6 +41,7 @@ type Server struct {
 	riotID string
 	log    *log.Logger
 	pages  map[string]*template.Template
+	meta   MetaSource
 
 	mu     sync.Mutex
 	status Status
@@ -53,7 +54,7 @@ func New(d *db.DB, riotID string, logger *log.Logger) (*Server, error) {
 		logger = log.New(io.Discard, "", 0)
 	}
 	s := &Server{db: d, riotID: riotID, log: logger, pages: map[string]*template.Template{}}
-	for _, p := range []string{"overview", "matches", "match", "champions", "champion", "soon", "error"} {
+	for _, p := range []string{"overview", "matches", "match", "champions", "champion", "tierlist", "soon", "error"} {
 		t, err := template.New(p).Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/parts.html", "templates/"+p+".html")
 		if err != nil {
 			return nil, fmt.Errorf("template %s: %w", p, err)
@@ -86,7 +87,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /matches/{id}", s.match)
 	mux.HandleFunc("GET /champions", s.champions)
 	mux.HandleFunc("GET /champions/{name}", s.champion)
-	mux.HandleFunc("GET /tier-list", s.soon("Tier list", "tier-list", "The meta tier list needs the OP.GG parser from Phase 2."))
+	mux.HandleFunc("GET /tier-list", s.tierListPage)
 	mux.HandleFunc("GET /champ-select", s.soon("Champ select", "champ-select", "The live champ select helper arrives with `draftsmith watch` in Phase 3."))
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusNotFound, errors.New("page not found"))

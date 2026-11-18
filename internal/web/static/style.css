@@ -221,3 +221,19 @@ h1.champ { gap: 12px; }
 .foot { color: var(--muted); font-size: .8rem; padding-top: 8px; padding-bottom: 24px; }
 
 .htmx-request #results, #results.htmx-request { opacity: .6; transition: opacity .2s; }
+
+/* OP.GG meta */
+.fresh { color: var(--muted); font-size: .85rem; margin: 0 0 10px; }
+.fresh.stale { color: var(--neg); }
+.seg a .count { font-size: .7rem; opacity: .75; }
+.tierb { display: inline-block; min-width: 28px; text-align: center; font-size: .7rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; color: #fff; background: var(--s2); }
+.tierb.t1 { background: #e8a33d; }
+.tierb.t2 { background: var(--accent); }
+.tierb.t3 { background: var(--pos); }
+.tierb.t4 { background: var(--s2); }
+.tierb.t5 { background: #8a8296; }
+.fits { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.fits li { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; }
+.fits .why { grid-column: 2; color: var(--muted); font-size: .85rem; }
+.meta-stats { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
+.meta-stats div { display: flex; flex-direction: column; }

@@ -1,0 +1,51 @@
+{{define "content"}}
+<div class="pagehead">
+  <h1>Tier list</h1>
+  <div class="seg" role="group" aria-label="Position">
+    {{$cur := .Position}}{{$q := .Queue.Key}}{{$s := .Sort}}
+    {{range .Positions}}<a href="/tier-list?queue={{$q}}&amp;position={{.Key}}&amp;sort={{$s}}" {{if eq .Key $cur}}aria-current="true"{{end}}>{{.Label}}{{if .Games}} <span class="count">{{.Games}}</span>{{end}}</a>{{end}}
+  </div>
+</div>
+
+{{if .Err}}
+<section class="card empty">{{template "metaError" .Err}}</section>
+{{else}}
+{{template "metaFreshness" .List.Freshness}}
+<section class="card">
+  <div class="scroll">
+  <table class="tbl tier">
+    <thead><tr>
+      {{$p := .Position}}
+      <th class="r"><a href="/tier-list?queue={{$q}}&amp;position={{$p}}&amp;sort=rank" {{if eq $s "rank"}}aria-current="true"{{end}}>#</a></th>
+      <th>Champion</th>
+      <th>Tier</th>
+      <th class="r"><a href="/tier-list?queue={{$q}}&amp;position={{$p}}&amp;sort=wr" {{if eq $s "wr"}}aria-current="true"{{end}}>Win rate</a></th>
+      <th class="r"><a href="/tier-list?queue={{$q}}&amp;position={{$p}}&amp;sort=games" {{if eq $s "games"}}aria-current="true"{{end}}>Games</a></th>
+      <th class="r">Pick</th>
+      <th class="r"><a href="/tier-list?queue={{$q}}&amp;position={{$p}}&amp;sort=ban" {{if eq $s "ban"}}aria-current="true"{{end}}>Ban</a></th>
+      <th class="r"><a href="/tier-list?queue={{$q}}&amp;position={{$p}}&amp;sort=mine" {{if eq $s "mine"}}aria-current="true"{{end}}>You</a></th>
+    </tr></thead>
+    <tbody>
+    {{range .Rows}}
+      <tr {{if .Mine.Games}}class="me"{{end}}>
+        <td class="r muted">{{.Rank}}</td>
+        <td>
+          {{if .Mine.Games}}<a class="champ" href="/champions/{{path .Key}}?queue={{$q}}">{{else}}<span class="champ">{{end}}
+          <span class="icon" data-initials="{{initials .Name}}"><img src="{{champImg .Key $.Patch}}" alt="" loading="lazy" width="28" height="28"></span>{{.Name}}
+          {{if .Mine.Games}}</a>{{else}}</span>{{end}}
+        </td>
+        <td><span class="tierb t{{.Tier}}">{{if eq .Tier 1}}OP{{else}}T{{.Tier}}{{end}}</span></td>
+        <td class="r">{{pct1 .WinRate}}</td>
+        <td class="r muted">{{thousands .Play}}</td>
+        <td class="r">{{pct .PickRate}}</td>
+        <td class="r">{{pct .BanRate}}</td>
+        <td class="r nowrap">{{if .Mine.Games}}<strong class="{{if ge .Mine.Games 5}}{{wrClass .MineAdj}}{{end}}" title="Adjusted win rate">{{pct .MineAdj}}</strong> <span class="muted">{{.Mine.Wins}}-{{.Mine.Losses}}</span>{{else}}<span class="muted">-</span>{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <p class="note">OP.GG, Emerald+ ranked, current patch. Win rate is wins over games, which is finer than OP.GG's rounded figure. "You" is your adjusted win rate on that champion in this role ({{.Queue.Label}}), against your overall {{pct .Overall}}.</p>
+</section>
+{{end}}
+{{end}}

@@ -278,7 +278,7 @@ func TestPoolFit(t *testing.T) {
 	add("Lux", "MIDDLE", 1, 0) // too few games
 	games = append(games, analysis.Game{Champion: "Lux", Role: "MIDDLE", Remake: true}, analysis.Game{Champion: "Lux", Role: "MIDDLE", Remake: true})
 
-	fits := PoolFit(games, 0.5, tl)
+	fits := PoolFit(games, 0.5, tl, PoolMinGames)
 	got := map[string]Fit{}
 	var order []string
 	for _, f := range fits {

@@ -51,3 +51,31 @@
   <div class="tile"><span class="label">Gold diff @15</span><strong class="{{diffClass .GoldDiff15}}">{{signed .GoldDiff15 0}}</strong><span class="muted">CS @10 {{signed .CSDiff10 1}}</span></div>
 </div>
 {{end}}
+
+{{define "metaFreshness"}}
+<p class="fresh{{if .Stale}} stale{{end}}">OP.GG data{{if .Patch}} for patch {{.Patch}}{{end}}, updated {{ago .FetchedAt}}.{{if .Stale}} Showing the cached copy because the refresh failed: {{.RefreshErr}}{{end}}</p>
+{{end}}
+
+{{define "metaError"}}
+{{if metaOff .}}<p class="muted">OP.GG data is turned off (<code>serve --no-meta</code>).</p>
+{{else}}<p>Couldn't load OP.GG data: {{.}}</p>
+<p class="muted">Nothing is cached yet, so there's nothing older to show. It will retry on the next visit.</p>{{end}}
+{{end}}
+
+{{define "counterTable"}}
+{{if .}}
+<table class="tbl">
+  <thead><tr><th>Opponent</th><th class="r">Win rate</th><th class="r">Games</th><th class="r">You</th></tr></thead>
+  <tbody>
+  {{range .}}
+    <tr>
+      <td><span class="champ"><span class="icon" data-initials="{{initials .Name}}"><img src="{{champImg .Key .Patch}}" alt="" loading="lazy" width="28" height="28"></span>{{.Name}}</span></td>
+      <td class="r {{wrClass .WinRate}}">{{pct1 .WinRate}}</td>
+      <td class="r muted">{{thousands .Play}}</td>
+      <td class="r nowrap">{{if .Mine.Games}}{{.Mine.Wins}}-{{.Mine.Losses}}{{else}}<span class="muted">-</span>{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}<p class="muted">Not enough games for OP.GG to list any.</p>{{end}}
+{{end}}

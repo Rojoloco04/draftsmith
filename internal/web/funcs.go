@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"math"
@@ -9,11 +10,20 @@ import (
 	"time"
 
 	"github.com/rojoloco04/draftsmith/internal/analysis"
+	"github.com/rojoloco04/draftsmith/internal/meta"
 	"github.com/rojoloco04/draftsmith/internal/riot"
 )
 
 var funcs = template.FuncMap{
 	"pct":      analysis.Pct,
+	"pct1": func(x float64) string {
+		if math.IsNaN(x) {
+			return "-"
+		}
+		return fmt.Sprintf("%.1f%%", x*100)
+	},
+	"pos":     meta.PositionName,
+	"metaOff": func(err error) bool { return errors.Is(err, errMetaOff) },
 	"signed":   analysis.Signed,
 	"num":      analysis.Num,
 	"role":     analysis.RoleName,

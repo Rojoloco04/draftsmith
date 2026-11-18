@@ -7,6 +7,24 @@
 {{if not .Rows}}
 <p class="card empty">No games indexed for {{.Queue.Label}}.</p>
 {{else}}
+{{if .Fits}}
+<section class="card">
+  <h2>Your pool vs the meta</h2>
+  {{template "metaFreshness" .Meta.Freshness}}
+  <ul class="fits">
+  {{range .Fits}}
+    <li>
+      <span class="icon" data-initials="{{initials .Champion}}"><img src="{{champImg .Champion $.Patch}}" alt="" loading="lazy" width="28" height="28"></span>
+      <span><a href="/champions/{{path .Champion}}?queue={{$.Queue.Key}}"><strong>{{champ .Champion}}</strong></a>
+        <span class="muted">{{pos .Position}} · {{.Games}} games · {{pct .Adjusted}} adjusted</span>
+        {{if .InMeta}}<span class="tierb t{{.Meta.Tier}}">{{if eq .Meta.Tier 1}}OP{{else}}T{{.Meta.Tier}}{{end}}</span>{{end}}</span>
+      <span class="why">{{.Note}}</span>
+    </li>
+  {{end}}
+  </ul>
+  <p class="note">Champions with 3+ games, compared in the role you play each one most. "Working" and "losing" mean 3+ points above or below your overall {{pct .Sum.Base}} after adjusting for sample size. Tiers are OP.GG's, Emerald+.</p>
+</section>
+{{end}}
 <section class="card">
   <p class="note">Adjusted win rate blends each champion's record with 10 games at your overall win rate ({{pct .Sum.Base}}), so a 3-0 champion doesn't top the list. Check the game count before reading much into a row.</p>
   <div class="scroll">
@@ -23,6 +41,7 @@
       <th class="r"><a href="/champions?queue={{$q}}&amp;sort=gd15" {{if eq $s "gd15"}}aria-current="true"{{end}}>Gold @15</a></th>
       <th class="r">KP</th>
       <th class="r">Deaths &lt;15</th>
+      <th title="OP.GG tier in the role you play it most">Meta</th>
     </tr></thead>
     <tbody>
     {{range .Rows}}
@@ -37,6 +56,8 @@
         <td class="r {{diffClass .GoldDiff15}}">{{signed .GoldDiff15 0}}</td>
         <td class="r">{{pct .KillPart}}</td>
         <td class="r">{{num .DeathsBefore15 1}}</td>
+        {{$f := index $.FitBy .Key}}
+        <td>{{if $f.InMeta}}<span class="tierb t{{$f.Meta.Tier}}" title="OP.GG {{pos $f.Position}}, rank {{$f.Meta.Rank}}">{{if eq $f.Meta.Tier 1}}OP{{else}}T{{$f.Meta.Tier}}{{end}}</span>{{else}}<span class="muted">-</span>{{end}}</td>
       </tr>
     {{end}}
     </tbody>

@@ -11,6 +11,7 @@ import (
 
 	"github.com/rojoloco04/draftsmith/internal/analysis"
 	"github.com/rojoloco04/draftsmith/internal/db"
+	"github.com/rojoloco04/draftsmith/internal/meta"
 )
 
 const pageSize = 20
@@ -328,6 +329,12 @@ type championsData struct {
 	Rows  []analysis.Group
 	Sort  string
 	Patch string
+	// Fits compares the pool with OP.GG's tier list for champions with
+	// meta.PoolMinGames or more; FitBy has every champion, for the table.
+	Fits    []meta.Fit
+	FitBy   map[string]meta.Fit
+	Meta    meta.TierList
+	MetaErr error
 }
 
 var champSorts = map[string]func(a, b analysis.Group) bool{
@@ -360,6 +367,15 @@ func (s *Server) champions(w http.ResponseWriter, r *http.Request) {
 	}
 	d.Rows = champRows(sum.Games, sum.Base)
 	sort.SliceStable(d.Rows, func(i, j int) bool { return less(d.Rows[i], d.Rows[j]) })
+	var fits []meta.Fit
+	fits, d.Meta, d.MetaErr = s.poolFit(r, sum)
+	d.FitBy = map[string]meta.Fit{}
+	for _, f := range fits {
+		d.FitBy[f.Champion] = f
+		if f.Games >= meta.PoolMinGames {
+			d.Fits = append(d.Fits, f)
+		}
+	}
 	s.render(w, r, "champions", "", d)
 }
 
@@ -373,6 +389,7 @@ type championData struct {
 	Matchups []analysis.Group
 	Games    []analysis.Game
 	WRChart  template.HTML
+	Meta     championMeta
 }
 
 func (s *Server) champion(w http.ResponseWriter, r *http.Request) {
@@ -406,5 +423,6 @@ func (s *Server) champion(w http.ResponseWriter, r *http.Request) {
 		d.Games = append(d.Games, games[i])
 	}
 	d.WRChart = winRateChart(games)
+	d.Meta = s.championMeta(r, name, d.Patch, games)
 	s.render(w, r, "champion", "", d)
 }

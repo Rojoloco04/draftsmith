@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/rojoloco04/draftsmith/internal/db"
+	"github.com/rojoloco04/draftsmith/internal/meta"
+	"github.com/rojoloco04/draftsmith/internal/opgg"
 	"github.com/rojoloco04/draftsmith/internal/store"
 	"github.com/rojoloco04/draftsmith/internal/web"
 )
@@ -27,6 +29,8 @@ func cmdServe(ctx context.Context, args []string) error {
 	noSync := fs.Bool("no-sync", false, "serve the archive as is, without background sync")
 	rate := fs.String("rate", "20/1s,100/2m", "rate limits, comma separated N/duration")
 	noTimelines := fs.Bool("no-timelines", false, "skip timelines when syncing")
+	noMeta := fs.Bool("no-meta", false, "don't fetch OP.GG meta data (tier list, champion analysis)")
+	opggEndpoint := fs.String("opgg-endpoint", opgg.DefaultEndpoint, "OP.GG MCP endpoint")
 	fs.Parse(args)
 
 	if err := checkListenAddr(*addr); err != nil {
@@ -96,6 +100,18 @@ func cmdServe(ctx context.Context, args []string) error {
 		s.LastSync = st.LastSync
 		s.SyncDisabled = disabled
 	})
+	if !*noMeta {
+		m := meta.New(d, *opggEndpoint)
+		srv.SetMeta(m)
+		// Warm the cache so the first visit to the tier list doesn't wait.
+		go func() {
+			if tl, err := m.TierList(ctx); err != nil {
+				logger.Printf("OP.GG tier list: %v", err)
+			} else if tl.Stale() {
+				logger.Printf("OP.GG tier list: serving the copy from %s: %v", tl.FetchedAt.Format(time.DateTime), tl.RefreshErr)
+			}
+		}()
+	}
 
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {

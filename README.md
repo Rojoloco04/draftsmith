@@ -38,10 +38,13 @@ Flags worth knowing:
 draftsmith serve                           # http://127.0.0.1:8080, syncs every 25 minutes
 draftsmith serve --addr 100.x.y.z:8080     # bind your Tailscale IP to open it from your phone
 draftsmith serve --no-sync                 # just browse the archive
+draftsmith serve --no-meta                 # don't call OP.GG
 draftsmith reindex                         # rebuild data/draftsmith.db from the archive
 ```
 
-Pages: an overview (rank and LP history, rolling win rate, top champions, roles, gold lead at 15 vs result, notes), match history with role and champion filters, a match page (both teams' stats, your gold and CS against your lane opponent, where you died), and per-champion stats with matchups.
+Pages: an overview (rank and LP history, rolling win rate, top champions, roles, gold lead at 15 vs result, notes), match history with role and champion filters, a match page (both teams' stats, your gold and CS against your lane opponent, where you died), per-champion stats with matchups, and an OP.GG tier list.
+
+OP.GG data (Emerald+, current patch) shows up in three places: the tier list page, with your own record next to each champion; a "your pool vs the meta" card and a meta tier column on the champions page; and an OP.GG card on each champion page with its tier, rates, and best and worst matchups, next to your record against those champions. Responses are cached in `data/draftsmith.db` and refreshed daily. If OP.GG is unreachable, the last copy is shown with its age.
 
 The dashboard has no login, so it only listens where you tell it to and refuses `0.0.0.0`. Keep it on localhost or Tailscale; don't port forward it. Other players appear as champion and position only. Champion and item icons load from Riot's Data Dragon CDN.
 
@@ -60,7 +63,7 @@ draftsmith meta tools --schema             # see what's available and each tool'
 draftsmith meta call lol_list_lane_meta_champions '{...args from the schema...}'
 ```
 
-Results are cached under `data/meta/`. The tool arguments aren't documented in OP.GG's README, so start with `meta tools --schema` to see them.
+`meta call` prints the raw response and saves it under `data/meta/`. The tool arguments aren't documented in OP.GG's README, so start with `meta tools --schema` to see them. Most tools answer in a positional "class" notation rather than JSON; `docs/opgg-tools.md` describes it and the quirks found so far.
 
 ## What the report covers
 
@@ -84,14 +87,15 @@ internal/ingest     incremental sync with resumable backfill
 internal/analysis   per-game features, the shared summary, and the markdown report
 internal/db         SQLite index over the archive for the dashboard
 internal/web        dashboard handlers, templates, SVG charts, static files (embedded)
-internal/opgg       MCP client for OP.GG meta data
+internal/opgg       MCP client for OP.GG, and the parser for its class notation
+internal/meta       typed, cached OP.GG calls (tier list, champion analysis) and the pool-vs-meta join
 internal/fixture    synthetic match/timeline JSON (and one scrubbed real game) for tests
 ```
 
 ## Roadmap
 
 - `sample`: crawl games from players in your tier to build real benchmarks (CS diff, vision, early deaths) for your role and elo, so the report can say "below your bracket" instead of only "below your own average"
-- Join OP.GG meta into the champion pool section (your adjusted win rate vs the champion's tier this patch), plus a tier list page
+- Pool vs meta notes in the markdown report, not just the dashboard
 - Champ select helper (`watch`) feeding the dashboard live
 - Death position heatmap across games
 - LLM writeup over `export` output

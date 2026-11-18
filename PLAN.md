@@ -24,7 +24,9 @@ The early code was stdlib only because the sandbox it was written in couldn't re
 
 Phases 0 and 1 were merged into `main` on 2026-11-17 and pushed to the public repo `github.com/rojoloco04/draftsmith`. Everything in it is public, so keep secrets, raw archive data, and other players' identities out of commits.
 
-**Next up: Phase 2** on a new branch off `main`, starting with the OP.GG class-notation parser (see Phase 2 and `docs/opgg-tools.md`).
+Phase 2 (branch `phase2-meta`; see the Phase 2 section): the OP.GG class-notation parser (`opgg.Parse`/`opgg.Decode`), `internal/meta` (typed, cached tier list, champion table and champion analysis), and the dashboard's tier list page, pool-vs-meta card and per-champion OP.GG card. Not merged to `main` yet.
+
+**Next up:** look over the Phase 2 pages, merge `phase2-meta` into `main`, then Phase 3 (`watch`). The remaining Phase 2 item (pool vs meta in the markdown report) is small and can go either side of the merge.
 
 Dev environment notes:
 
@@ -96,7 +98,30 @@ Testing: handlers with `httptest` against a temp SQLite DB built from `internal/
 
 Small-sample caveat: there are only 47 real games, so per-champion and matchup views should show game counts prominently and use the adjusted win rate by default.
 
-## Phase 2: OP.GG meta integration
+## Phase 2: OP.GG meta integration (dashboard side done 2026-11-18)
+
+What shipped:
+
+- `opgg.Parse` turns class notation into plain Go values; `opgg.Decode` fills json-tagged structs from it and returns `*opgg.FieldError` when the server reports requested fields it skipped (`_field_diagnostics`), so schema drift is an error rather than silently empty data. Plain JSON responses go through the same functions. Tests use real responses captured on patch 16.22 (`internal/opgg/testdata`).
+- `internal/meta`: `TierList` (one `position: all` call, joined to Riot keys through `lol_list_champions`), `Champions`, `Analysis` (stats, runes, damage type, three best and worst matchups, patch from `data.trends.win.version`), and `PoolFit`. Raw response text is cached in `meta_cache` and parsed on read. Fresh for 24h (7 days for the champion table); after that a refresh is tried, and on failure the old copy is served with `RefreshErr` set and no retry for 5 minutes. Each refresh opens a new MCP session, so a session the server dropped during a long `serve` can't get stuck. Network calls are serialized.
+- Dashboard: `/tier-list` (per position, defaulting to my main role; sortable; my adjusted win rate and record next to each champion), a "your pool vs the meta" card and a Meta tier column on `/champions`, and an OP.GG card on each champion page with my record against its listed matchups. `serve --no-meta` turns it all off; `serve` warms the tier list cache at startup. Pages wait at most 15s on OP.GG.
+- Checked against live OP.GG and the real archive: every page renders, cached loads take about 5ms, and Wukong (`MonkeyKing`) and Riot's `FiddleSticks` spelling join correctly.
+
+Decided:
+
+- **Champion analysis is cached for 24h, not per patch.** The tier list has no patch field, and a daily refresh catches patch day anyway. The analysis's patch is stored and shown.
+- "Working for you" and "losing for you" in the pool card use the report's threshold: adjusted win rate 3+ points above or below my overall. Meta strong is tier 1-2, weak is tier 4-5. The notes need 3+ games; the Meta column shows every champion.
+- In both counter lists, `win` is the analyzed champion's wins (checked against `my_win_rate`), so `Counter.WinRate()` is always "my champion into them".
+- The champion table's `Jade_*` mode variants (ids 60001+) are skipped.
+
+Left:
+
+- Pool vs meta in the markdown `report`. It should read only the cache (no network from `report`) and skip the section when nothing is cached.
+- Rune names and icons: `Analysis.Runes` already has the ids an LCU page needs; display needs Data Dragon's `runesReforged.json`. Do it with Phase 3's rune import.
+- `lol_get_lane_matchup_guide` isn't wrapped yet; Phase 3's matchup view is the first real use.
+- The `data/meta/*.json` files from `meta call` are only probes now; nothing reads them.
+
+Original plan:
 
 - `internal/meta`: typed wrappers over the OP.GG tools once Phase 0 shows the schemas. Cache each response with a timestamp and patch; serve stale data if OP.GG is down and show its age.
 - First piece: a parser for OP.GG's class notation into `map[string]any`/typed structs, tested on responses captured in `docs/opgg-tools.md` probes.

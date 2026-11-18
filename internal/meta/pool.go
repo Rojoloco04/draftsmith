@@ -7,8 +7,8 @@ import (
 	"github.com/rojoloco04/draftsmith/internal/analysis"
 )
 
-// PoolMinGames is the fewest games on a champion before it is compared
-// with the meta.
+// PoolMinGames is the fewest games on a champion before its fit with the
+// meta is worth a note.
 const PoolMinGames = 3
 
 // Fit compares my results on a champion with its place in the meta, in
@@ -44,9 +44,9 @@ func (f Fit) MetaRead() string {
 	return "average"
 }
 
-// PoolFit lines up every champion I've played at least PoolMinGames times
+// PoolFit lines up every champion I've played at least minGames times
 // (remakes excluded) with the tier list, most played first.
-func PoolFit(games []analysis.Game, base float64, tl TierList) []Fit {
+func PoolFit(games []analysis.Game, base float64, tl TierList, minGames int) []Fit {
 	byChamp := map[string][]analysis.Game{}
 	for _, g := range games {
 		if !g.Remake {
@@ -55,7 +55,7 @@ func PoolFit(games []analysis.Game, base float64, tl TierList) []Fit {
 	}
 	var out []Fit
 	for champ, gs := range byChamp {
-		if len(gs) < PoolMinGames {
+		if len(gs) < max(minGames, 1) {
 			continue
 		}
 		roles := analysis.GroupBy(gs, func(g analysis.Game) string { return g.Role })

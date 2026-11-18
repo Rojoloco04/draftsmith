@@ -22,6 +22,12 @@ import (
 // two of them flex) plus the real scrubbed Vladimir game.
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
+	return newTestServerWith(t, nil)
+}
+
+// newTestServerWith is newTestServer with OP.GG data from m (nil for off).
+func newTestServerWith(t *testing.T, m MetaSource) *httptest.Server {
+	t.Helper()
 	dir := t.TempDir()
 	s, err := store.Open(dir)
 	if err != nil {
@@ -61,6 +67,9 @@ func newTestServer(t *testing.T) *httptest.Server {
 		t.Fatal(err)
 	}
 	srv.SetStatus(func(st *Status) { st.LastSync = time.Now().Add(-5 * time.Minute) })
+	if m != nil {
+		srv.SetMeta(m)
+	}
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts
@@ -202,7 +211,7 @@ func TestChampions(t *testing.T) {
 
 func TestStubsStaticAndHeaders(t *testing.T) {
 	ts := newTestServer(t)
-	for _, p := range []string{"/tier-list", "/champ-select"} {
+	for _, p := range []string{"/champ-select"} {
 		code, body := get(t, ts, p)
 		if code != 200 || !strings.Contains(body, "Phase") {
 			t.Errorf("%s: %d", p, code)

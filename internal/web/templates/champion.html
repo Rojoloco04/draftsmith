@@ -44,6 +44,33 @@
   </section>
 </div>
 
+<section class="card">
+  <h2>OP.GG{{with .Meta.Position}} {{pos .}}{{end}} <span class="muted">Emerald+</span></h2>
+  {{if .Meta.Err}}{{template "metaError" .Meta.Err}}
+  {{else}}{{with .Meta}}
+  {{template "metaFreshness" .Freshness}}
+  <div class="meta-stats">
+    <div><span class="label">Tier</span><span><span class="tierb t{{.Tier}}">{{if eq .Tier 1}}OP{{else}}T{{.Tier}}{{end}}</span> <span class="muted">#{{.Rank}}</span></span></div>
+    <div><span class="label">Win rate</span><strong>{{pct .WinRate}}</strong></div>
+    <div><span class="label">Pick</span><strong>{{pct .PickRate}}</strong></div>
+    <div><span class="label">Ban</span><strong>{{pct .BanRate}}</strong></div>
+    <div><span class="label">Games</span><strong>{{thousands .Play}}</strong></div>
+    {{with .DamageType}}<div><span class="label">Damage</span><strong>{{.}}</strong></div>{{end}}
+  </div>
+  <div class="grid two">
+    <div>
+      <h3>Does best into</h3>
+      {{template "counterTable" .Good}}
+    </div>
+    <div>
+      <h3>Struggles against</h3>
+      {{template "counterTable" .Bad}}
+    </div>
+  </div>
+  <p class="note">Win rates are {{champ .Key}}'s, from OP.GG's games. "You" is your record into that champion in this role.</p>
+  {{end}}{{end}}
+</section>
+
 <section>
   <h2>Games</h2>
   <div class="mlist">{{range .Games}}{{template "matchRow" .}}{{end}}</div>

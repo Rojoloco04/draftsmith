@@ -17,7 +17,7 @@
       <a href="/?queue={{.Queue.Key}}" {{if eq .Nav "overview"}}aria-current="page"{{end}}>Overview</a>
       <a href="/matches?queue={{.Queue.Key}}" {{if eq .Nav "matches"}}aria-current="page"{{end}}>Matches</a>
       <a href="/champions?queue={{.Queue.Key}}" {{if eq .Nav "champions"}}aria-current="page"{{end}}>Champions</a>
-      <a href="/tier-list" class="soon" {{if eq .Nav "tier-list"}}aria-current="page"{{end}}>Tier list</a>
+      <a href="/tier-list?queue={{.Queue.Key}}" {{if eq .Nav "tier-list"}}aria-current="page"{{end}}>Tier list</a>
       <a href="/champ-select" class="soon" {{if eq .Nav "champ-select"}}aria-current="page"{{end}}>Champ select</a>
     </nav>
     <span class="who">{{.RiotID}}</span>
