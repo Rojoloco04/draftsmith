@@ -1,0 +1,7 @@
+.env
+data/
+/lolstats
+/lolstats.exe
+*.md.out
+report.md
+games.jsonl
