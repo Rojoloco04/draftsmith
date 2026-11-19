@@ -28,9 +28,9 @@ type Spec struct {
 	Assists              int
 	GoldLead             int // tracked player's gold lead over opponent at every frame
 	CSLead               int
-	EarlyDeathsEnemySide int  // deaths at minute 5.. on enemy half
-	Queue                int  // default solo queue
-	NoTimeline           bool // Archive stores no timeline for this game
+	EarlyDeathsEnemySide int    // deaths at minute 5.. on enemy half
+	Queue                int    // default solo queue
+	NoTimeline           bool   // Archive stores no timeline for this game
 	PUUID                string // tracked player's PUUID, default MePUUID (another of my accounts)
 }
 

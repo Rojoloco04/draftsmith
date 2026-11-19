@@ -55,9 +55,9 @@ type Account struct {
 type Server struct {
 	db       *db.DB
 	accounts []Account
-	log    *log.Logger
-	pages  map[string]*template.Template
-	meta   MetaSource
+	log      *log.Logger
+	pages    map[string]*template.Template
+	meta     MetaSource
 
 	mu      sync.Mutex
 	status  Status
@@ -154,11 +154,11 @@ type Base struct {
 	// every account; the header offers a switch when there are several.
 	Account  *Account
 	Accounts []Account
-	Queue  queueOpt
-	Queues []queueOpt
-	Status Status
-	Sync   syncView
-	Now    time.Time
+	Queue    queueOpt
+	Queues   []queueOpt
+	Status   Status
+	Sync     syncView
+	Now      time.Time
 	// Rank is the latest snapshot for the header (solo queue unless flex
 	// is selected); nil before the first one.
 	Rank *db.RankSnapshot

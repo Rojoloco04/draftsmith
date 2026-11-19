@@ -56,8 +56,8 @@ func rankQueue(q queueOpt) string {
 
 type overviewData struct {
 	Base
-	Sum       analysis.Summary
-	Patch     string
+	Sum   analysis.Summary
+	Patch string
 	// Rank is the selected account's latest snapshot. With all accounts
 	// selected it's nil, and Ranks has each account's instead.
 	Rank      *db.RankSnapshot
