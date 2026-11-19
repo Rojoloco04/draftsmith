@@ -273,8 +273,9 @@ var ErrNoData = errors.New("OP.GG has no data for that champion and position")
 
 // analysisVersion is part of the analysis cache key. Bump it when the
 // requested fields change, so copies cached without them are fetched again
-// rather than served for a day. v2 added rune names, v3 spells and items.
-const analysisVersion = "v3"
+// rather than served for a day. v2 added rune names, v3 spells and
+// items, v4 item names and skill orders.
+const analysisVersion = "v4"
 
 // Analysis returns OP.GG's stats, counters and runes for a champion (Riot
 // key) in a position, for the Emerald+ bracket.

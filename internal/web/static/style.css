@@ -490,6 +490,22 @@ td.items img, td.items .slot { margin-right: 3px; }
 .cs-vs .small { margin-left: auto; }
 .cs-runes { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
 .cs-spells { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+
+/* A build: item rows, the max order and the level-by-level skill order. */
+.build { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
+.build-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.build-row > .label { width: 44px; flex: none; }
+.build-row > .small { margin-left: auto; }
+.build-items, .skill-max { display: inline-flex; align-items: center; gap: 4px; }
+.build-items img { width: 32px; height: 32px; border-radius: 8px; background: var(--surface-3); }
+.build .sep { width: 12px; height: 12px; color: var(--muted); }
+.skill-max .key { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; font-size: .8rem; font-weight: 750; color: #fff; }
+.k-Q { --k: var(--s1); } .k-W { --k: var(--pos); } .k-E { --k: var(--gold); } .k-R { --k: var(--s3); }
+.skill-max .key { background: var(--k); }
+.skill-order { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 3px; }
+.skill-order li { display: flex; flex-direction: column; align-items: center; padding: 3px 0 4px; border-radius: 6px; font-size: .72rem; font-weight: 750; color: var(--k); background: color-mix(in srgb, var(--k) 14%, transparent); }
+.skill-order li span { font-size: .6rem; font-weight: 600; color: var(--muted); }
+.cs-game { max-width: 720px; }
 .cs-spells .small { margin-left: auto; margin-right: 0 !important; }
 .cs-runes summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; list-style: none; }
 .cs-runes summary::-webkit-details-marker { display: none; }
@@ -536,6 +552,10 @@ body.overlay { min-height: 0; font-size: 13px; overflow-x: hidden; background: v
 .overlay .cs-vs .small { margin-left: 0; flex-basis: 100%; padding-left: 42px; margin-top: -4px; }
 .overlay .cs-runes { margin-top: 10px; padding-top: 8px; }
 .overlay .cs-spells { margin-top: 10px; padding-top: 8px; gap: 6px; }
+.overlay .build { margin-top: 10px; padding-top: 10px; gap: 8px; }
+.overlay .build-items img { width: 26px; height: 26px; }
+.overlay .build-row > .small { flex-basis: 100%; margin-left: 54px; margin-top: -6px; }
+.overlay .skill-order { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 .overlay .cs-spells .sp { width: 24px; height: 24px; }
 .overlay .cs-spells .small { flex-basis: 100%; margin-left: 0; }
 .overlay .runepage { gap: 8px; }

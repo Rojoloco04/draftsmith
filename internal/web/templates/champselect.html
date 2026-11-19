@@ -13,6 +13,31 @@
   <p>This page follows the League client on the PC it runs on. Start the dashboard there with <code>draftsmith serve --watch</code>.</p>
   <p class="muted">For the same suggestions in a terminal, run <code>draftsmith watch</code>.</p>
 </section>
+{{else if .Game}}{{with .Game}}{{$p := .Pick}}{{$gp := .Patch}}
+<div class="cs-head">
+  <div class="cs-phase"><span class="label">In game</span></div>
+  {{with .Position}}<span class="cs-lane">{{template "role" .}}<span>{{pos .}}</span></span>{{end}}
+</div>
+<article class="card cs-pick first cs-game">
+  <header class="cs-pick-head">
+    <span class="icon xl" data-initials="{{initials $p.Name}}"><img src="{{champImg $p.Key .Patch}}" alt="" width="72" height="72"></span>
+    <div class="cs-pick-name">
+      <span class="label">Build{{if $p.RunesVs.Key}} vs {{$p.RunesVs.Name}}{{end}}</span>
+      <h2>{{$p.Name}}</h2>
+      {{if $p.Scored}}<span class="muted">Est. win {{pct $p.WinProb}} from champ select</span>{{end}}
+    </div>
+  </header>
+  {{if $p.Build.Empty}}<p class="muted">OP.GG had no build for {{$p.Name}} {{pos .Position}}.</p>
+  {{else}}{{template "build" (dict "B" $p.Build "Patch" .Patch)}}{{end}}
+  {{with $p.Spells.IDs}}<div class="spell-row cs-spells"><span class="label">Spells</span>{{range .}}{{template "spell" (dict "ID" . "Patch" $gp)}}<span>{{spellName .}}</span>{{end}}</div>{{end}}
+  {{if eq $p.RunesState "ok"}}
+  <details class="cs-runes" data-key="{{$p.Key}}">
+    <summary><span class="label">Runes</span><span class="loadout"><span class="pair runes">{{with $p.Runes.Primary}}{{template "rune" (index . 0)}}{{end}}</span><span class="pair runes">{{template "rune" $p.Runes.SubStyle}}</span></span></summary>
+    {{template "runePage" (opggRunes $p.Runes)}}
+  </details>
+  {{end}}
+</article>
+{{end}}
 {{else if not .Have}}
 <section class="card empty cs-wait">
   <span class="cs-status{{if .Phase}} up{{end}}"><span class="dot"></span>{{clientPhase .Phase}}</span>
@@ -106,6 +131,7 @@
   {{if and (eq $p.RunesState "ok") $p.Spells.IDs}}
   <div class="spell-row cs-spells"><span class="label">Spells</span>{{range $p.Spells.IDs}}{{template "spell" (dict "ID" . "Patch" $.Patch)}}<span>{{spellName .}}</span>{{end}}<span class="muted small">{{pct $p.Spells.PickRate}} pick{{if $p.RunesVs.Key}} vs {{$p.RunesVs.Name}}{{end}}</span></div>
   {{end}}
+  {{if and .Locked (eq $p.RunesState "ok") (not $p.Build.Empty)}}{{template "build" (dict "B" $p.Build "Patch" .Patch)}}{{end}}
   <details class="cs-runes" data-key="{{$p.Key}}"{{if eq .I 0}} open{{end}}>
     <summary>
       <span class="label">Runes {{if eq $p.RunesState "ok"}}{{if $p.RunesVs.Key}}vs {{$p.RunesVs.Name}}{{else}}· usual page{{end}}{{end}}</span>
@@ -116,4 +142,28 @@
     {{else}}<p class="muted">OP.GG has no rune page for it here.</p>{{end}}
   </details>
 </article>
+{{end}}
+
+{{/* OP.GG's build for one champion (dict B meta.Build, Patch): starting
+     items, boots, core items, and skill order. */}}
+{{define "build"}}{{$patch := .Patch}}
+<div class="build">
+  {{range $row := (list (dict "Label" "Start" "C" .B.Starter) (dict "Label" "Boots" "C" .B.Boots) (dict "Label" "Core" "C" .B.Core))}}{{with $row.C}}{{$c := index . 0}}
+  <div class="build-row">
+    <span class="label">{{$row.Label}}</span>
+    <span class="build-items">{{range $i, $id := $c.IDs}}{{if $i}}{{if ne $row.Label "Start"}}<svg class="i sep" aria-hidden="true"><use href="#i-arrow"/></svg>{{end}}{{end}}<img src="{{itemImg $id $patch}}" alt="{{nameAt $c.Names $i}}" title="{{nameAt $c.Names $i}}" width="32" height="32" loading="lazy">{{end}}</span>
+    <span class="muted small">{{pct $c.PickRate}} pick · {{pct1 $c.WinRate}} win</span>
+  </div>
+  {{end}}{{end}}
+  {{with .B.Max}}{{$m := index . 0}}
+  <div class="build-row">
+    <span class="label">Skills</span>
+    <span class="skill-max">{{range $i, $k := $m.IDs}}{{if $i}}<svg class="i sep" aria-hidden="true"><use href="#i-arrow"/></svg>{{end}}<b class="key k-{{$k}}">{{$k}}</b>{{end}}</span>
+    <span class="muted small">max order · {{pct $m.PickRate}} pick</span>
+  </div>
+  {{end}}
+  {{with .B.Skills}}{{$o := index . 0}}
+  <ol class="skill-order" aria-label="Skill order by level">{{range $i, $k := $o.Order}}<li class="k-{{$k}}" title="Level {{add $i 1}}: {{$k}}"><span>{{add $i 1}}</span>{{$k}}</li>{{end}}</ol>
+  {{end}}
+</div>
 {{end}}

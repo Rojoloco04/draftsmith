@@ -66,9 +66,11 @@ type Pick struct {
 	Runes      meta.RunePage
 	RunesVs    Champ
 	RunesState string
-	// Spells is OP.GG's most played summoner spell pair, from the same
-	// source as Runes (zero if it lists none).
+	// Spells is OP.GG's most played summoner spell pair, and Build its
+	// items and skill order, from the same source as Runes (zero if it
+	// lists none).
 	Spells meta.Choice
+	Build  meta.Build
 }
 
 // Versus is one possible lane opponent for a pick.
@@ -150,7 +152,8 @@ func (l *Live) pick(champ string, sg *Suggestion, position, opp string) Pick {
 	case !r.ok:
 		p.RunesState = RunesNone
 	default:
-		p.RunesState, p.Runes, p.Spells = RunesOK, r.page, r.spells
+		p.RunesState, p.Runes, p.Build = RunesOK, r.page, r.build
+		p.Spells, _ = r.build.TopSpells()
 		if r.vs != "" {
 			p.RunesVs = Champ{Key: r.vs, Name: l.name(r.vs)}
 		}

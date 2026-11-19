@@ -32,18 +32,25 @@ var funcs = template.FuncMap{
 	"champ":       champName,
 	"champImg":    champImg,
 	"itemImg":     itemImg,
-	"runeImg":     runeImg,
-	"runeName":    runeName,
-	"spellImg":    spellImg,
-	"spellName":   spellName,
-	"splashImg":   splashImg,
-	"rankCrest":   rankCrest,
-	"rankEmblem":  rankEmblem,
-	"rankLabel":   rankLabel,
-	"roleKey":     roleKey,
-	"roleLabel":   roleLabel,
-	"dict":        dict,
-	"opggRunes":   opggRunes,
+	"nameAt": func(names []string, i int) string {
+		if i < len(names) {
+			return names[i]
+		}
+		return ""
+	},
+	"runeImg":    runeImg,
+	"runeName":   runeName,
+	"spellImg":   spellImg,
+	"spellName":  spellName,
+	"splashImg":  splashImg,
+	"rankCrest":  rankCrest,
+	"rankEmblem": rankEmblem,
+	"rankLabel":  rankLabel,
+	"roleKey":    roleKey,
+	"roleLabel":  roleLabel,
+	"dict":       dict,
+	"list":       func(xs ...any) []any { return xs },
+	"opggRunes":  opggRunes,
 	"recordPct": func(wins, losses int) float64 {
 		if wins+losses == 0 {
 			return math.NaN()

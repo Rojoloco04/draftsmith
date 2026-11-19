@@ -1,11 +1,13 @@
 class LolGetChampionAnalysis: data
-class Data: summary,damage_type,strong_counters,weak_counters,core_items,boots,starter_items,summoner_spells,runes,trends
+class Data: summary,damage_type,strong_counters,weak_counters,core_items,boots,starter_items,summoner_spells,runes,skills,skill_masteries,trends
 class Summary: average_stats
 class AverageStats: play,win_rate,pick_rate,ban_rate,tier,rank
 class StrongCounter: champion_name,play,win
-class CoreItems: ids,play,win,pick_rate
+class CoreItems: ids,ids_names,play,win,pick_rate
+class SummonerSpells: ids,win,play,pick_rate
 class Runes: primary_page_id,primary_rune_ids,primary_rune_names,secondary_page_id,secondary_rune_ids,secondary_rune_names,stat_mod_ids,play,win,pick_rate
+class Skills: order,play,win,pick_rate
 class Trends: win
 class Win: version
 
-LolGetChampionAnalysis(Data(Summary(AverageStats(7660,0.5,0.07,0.03,3,83)),"AP",[StrongCounter("Diana",104,62),StrongCounter("Akali",333,185),StrongCounter("Katarina",231,129)],[StrongCounter("Ahri",282,108),StrongCounter("Lissandra",121,56),StrongCounter("Zed",120,55)],CoreItems([3152,4005,3157],459,260,0.15),CoreItems([3111],3177,1555,0.5),CoreItems([1056,2003,2003],5588,2799,0.85),CoreItems([4,12],4657,2279,0.74),Runes(8200,[8230,8226,8210,8237],["Stormraider's Surge","Manaflow Band","Transcendence","Scorch"],8400,[8242,8444],["Unflinching","Second Wind"],[5008,5008,5011],2318,1134,0.37),Trends(Win("16.23"))))
+LolGetChampionAnalysis(Data(Summary(AverageStats(7660,0.5,0.07,0.03,3,83)),"AP",[StrongCounter("Diana",104,62),StrongCounter("Akali",333,185),StrongCounter("Katarina",231,129)],[StrongCounter("Ahri",282,108),StrongCounter("Lissandra",121,56),StrongCounter("Zed",120,55)],CoreItems([3152,4005,3157],["Hextech Rocketbelt","Imperial Mandate","Zhonya's Hourglass"],459,260,0.15),CoreItems([3111],["Mercury's Treads"],3177,1555,0.5),CoreItems([1056,2003,2003],["Doran's Ring","Health Potion","Health Potion"],5588,2799,0.85),SummonerSpells([4,12],2279,4657,0.74),Runes(8200,[8230,8226,8210,8237],["Stormraider's Surge","Manaflow Band","Transcendence","Scorch"],8400,[8242,8444],["Unflinching","Second Wind"],[5008,5008,5011],2318,1134,0.37),Skills(["Q","W","E","Q","Q","R","Q","W","Q","W","R","W","W","E","E"],1664,990,0.49),SummonerSpells(["Q","W","E"],1804,2984,0.88),Trends(Win("16.23"))))

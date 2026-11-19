@@ -44,7 +44,7 @@ The overlay is built (2026-11-18, see "Overlay" in the Phase 3 section): `serve 
 
 1. ~~Summoner spell recommendations in champ select~~: done 2026-11-18, see "Spells and builds" in the Phase 3 section.
 2. ~~Multiple accounts~~: done 2026-11-18, see "Multiple accounts" below. `Rojoloco#SLU` is not added yet: that needs `draftsmith sync --riot-id Rojoloco#SLU` with the new build, after stopping any `serve` still running the old one (an old binary rewriting `state.json` would drop the account list).
-3. Build recommendations in game. This relaxes the old "nothing during the game" rule; see the compliance rules.
+3. ~~Build recommendations in game~~: done 2026-11-18, see "In-game build" below. Open question for the user: should the overlay window also show during the game (over the game's screen edge), or is the dashboard on a second screen or phone enough?
 
 Team comp gaps (damage mix, frontline) are not in the score yet.
 
@@ -56,6 +56,13 @@ Multiple accounts (2026-11-18):
 - Dashboard: with 2+ accounts the header pill is a menu (All accounts, then each). The choice is a cookie (`account`, the Riot ID), so links don't change; `/account?id=...&back=...` sets it and only redirects to local paths. Every game query filters by it. In "All", the overview lists each account's rank and the rank chart has one line per account on a shared day axis.
 - `report` and `export` take `--account Name#TAG` (default `all`). Champ select suggestions use every account's solo queue games: it's the same player, and there are few games.
 - Decided without asking (the user can overrule): "All accounts" is the default view, and suggestions pool every account.
+
+In-game build (2026-11-18):
+
+- `meta.Build` also has item names (`ids_names`, strings for items), `Skills` (level-by-level order) and `Max` (max order); analysis asks for them too (`analysisVersion` v4). `Build.String()` is the one-line form `watch` logs after lock-in ("; build Doran's Ring + Health Potion x2 > ... ; max Q > W > E").
+- Each pick carries the build from the same response as its runes (the matchup guide when my laner is 50%+ likely, else champion analysis). The locked-in pick card shows it.
+- `web`: when gameflow goes from ChampSelect to GameStart/InProgress/Reconnect with a locked pick on the board, the server keeps that pick (`champSelect.game`) and `/champ-select` and `/overlay` show an "In game" build card: starting items, boots, core, max order, the 15-level skill order, spells and runes. Any other phase clears it; a dodge never shows one; a game that started before `serve` saw its champ select shows no build.
+- Static data only, for my own champion: no Live Client Data API yet, so nothing tracks what I've bought. The overlay window still shows only during champ select.
 
 Handoff notes (things a new session would otherwise rediscover):
 

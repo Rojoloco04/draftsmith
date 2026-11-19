@@ -20,6 +20,9 @@ type champSelect struct {
 	phase string // the client's gameflow phase, "" without a client
 	board draft.Board
 	have  bool // board is the current champ select
+	// game is my locked pick from the champ select that became the game
+	// in progress, for its build. nil outside a game.
+	game *gameView
 	// changed is closed and replaced on every change, waking every stream.
 	changed chan struct{}
 }
@@ -39,6 +42,12 @@ func (s *Server) WatchPhase(phase string) {
 	s.csUpdate(func(c *champSelect) bool {
 		if c.phase == phase {
 			return false
+		}
+		if c.phase == lcu.PhaseChampSelect && inGame(phase) && c.have && c.board.Locked && len(c.board.Picks) > 0 {
+			c.game = &gameView{Pick: c.board.Picks[0], Position: c.board.Position, Patch: c.board.Patch}
+		}
+		if !inGame(phase) {
+			c.game = nil
 		}
 		c.phase = phase
 		if phase != lcu.PhaseChampSelect {
@@ -73,6 +82,22 @@ func (s *Server) csUpdate(f func(*champSelect) bool) {
 	s.cs.changed = make(chan struct{})
 }
 
+// gameView is the game in progress: the pick I locked in, with its build.
+type gameView struct {
+	Pick     draft.Pick
+	Position string
+	Patch    string
+}
+
+// inGame reports whether a gameflow phase is a game loading or running.
+func inGame(phase string) bool {
+	switch phase {
+	case "GameStart", "InProgress", "Reconnect":
+		return true
+	}
+	return false
+}
+
 // csView is the champ select as the "board" template draws it.
 type csView struct {
 	On    bool
@@ -80,6 +105,8 @@ type csView struct {
 	Phase string
 	Have  bool
 	Board draft.Board
+	// Game is set during a game that started from a champ select seen here.
+	Game *gameView
 	// Left is the countdown at render time, in ms (0 for none). The page
 	// counts it down itself between updates.
 	Left int64
@@ -94,7 +121,7 @@ func (s *Server) csSnapshot() (csView, <-chan struct{}) {
 		s.cs.changed = make(chan struct{})
 	}
 	c := s.cs
-	v := csView{On: c.on, Note: c.note, Phase: c.phase, Have: c.have, Board: c.board}
+	v := csView{On: c.on, Note: c.note, Phase: c.phase, Have: c.have, Board: c.board, Game: c.game}
 	if !c.board.Ends.IsZero() {
 		v.Left = max(0, time.Until(c.board.Ends).Milliseconds())
 	}

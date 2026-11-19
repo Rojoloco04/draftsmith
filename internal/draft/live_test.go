@@ -186,7 +186,8 @@ func TestLiveRealChampSelect(t *testing.T) {
 	// Locked in: just my champion's page for the matchup.
 	l.Update(final)
 	waitFor(t, out, "locked in Galio (Mid); runes vs Katarina: Sorcery: Stormraider's Surge")
-	if b := lastBoard(); !b.Locked || len(b.Picks) != 1 || b.Picks[0].Name != "Galio" || b.Picks[0].RunesState != RunesOK {
+	waitFor(t, out, "; build Doran's Ring + Health Potion x2 > ")
+	if b := lastBoard(); !b.Locked || len(b.Picks) != 1 || b.Picks[0].Name != "Galio" || b.Picks[0].RunesState != RunesOK || len(b.Picks[0].Build.Core) == 0 {
 		t.Errorf("locked board: %+v", b)
 	}
 

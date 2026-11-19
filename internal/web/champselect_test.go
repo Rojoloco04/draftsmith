@@ -202,3 +202,63 @@ func TestChampSelectEvents(t *testing.T) {
 	_, data = readEvent(t, r)
 	expect(t, data, "In a lobby")
 }
+
+// testBuild is Galio's build into Katarina.
+func testBuild() meta.Build {
+	return meta.Build{
+		Starter: []meta.Choice{{IDs: []int{1056, 2003, 2003}, Names: []string{"Doran's Ring", "Health Potion", "Health Potion"}, Play: 292, Win: 166, PickRate: 0.8875}},
+		Boots:   []meta.Choice{{IDs: []int{3047}, Names: []string{"Plated Steelcaps"}, Play: 139, Win: 72, PickRate: 0.4344}},
+		Core:    []meta.Choice{{IDs: []int{3152, 4005, 3157}, Names: []string{"Hextech Rocketbelt", "Imperial Mandate", "Zhonya's Hourglass"}, Play: 25, Win: 11, PickRate: 0.1445}},
+		Max:     []meta.SkillMax{{IDs: []string{"Q", "W", "E"}, Play: 154, Win: 108, PickRate: 0.8701}},
+		Skills:  []meta.SkillOrder{{Order: strings.Split("Q W E Q Q R Q W Q W R W W E E", " "), Play: 89, Win: 62, PickRate: 0.5028}},
+	}
+}
+
+func TestInGameBuild(t *testing.T) {
+	srv, ts := newTestApp(t, nil)
+	srv.WatchStarted("")
+	srv.WatchPhase(lcu.PhaseChampSelect)
+
+	b := testBoard()
+	b.Picks, b.Locked = b.Picks[:1], true
+	b.Picks[0].Build = testBuild()
+	srv.WatchBoard(b)
+
+	// Locked in: the build shows on the pick card already.
+	_, body := get(t, ts, "/champ-select")
+	expect(t, body, "Locked in", `class="build"`, `alt="Doran&#39;s Ring"`, `alt="Plated Steelcaps"`, `alt="Zhonya&#39;s Hourglass"`,
+		`<b class="key k-Q">Q</b>`, `title="Level 6: R"`, "89% pick")
+
+	// In game, the page and the overlay keep it.
+	srv.WatchPhase("GameStart")
+	srv.WatchPhase("InProgress")
+	for _, p := range []string{"/champ-select", "/overlay"} {
+		_, body = get(t, ts, p)
+		expect(t, body, "In game", "Build vs Katarina", "Galio", "/img/item/3152.png", "/img/item/3047.png", `class="skill-order"`,
+			"<span>Flash</span>", "Est. win 58% from champ select")
+	}
+
+	// After the game it's gone.
+	srv.WatchPhase("EndOfGame")
+	_, body = get(t, ts, "/champ-select")
+	if strings.Contains(body, "Build vs") {
+		t.Error("build still shown after the game")
+	}
+
+	// A dodge (champ select back to the lobby) never shows a build.
+	srv.WatchPhase(lcu.PhaseChampSelect)
+	srv.WatchBoard(b)
+	srv.WatchPhase("Lobby")
+	_, body = get(t, ts, "/champ-select")
+	if strings.Contains(body, "Build vs") {
+		t.Error("build shown after a dodge")
+	}
+
+	// A game that wasn't locked in here (serve started mid-game) has no build.
+	srv.WatchPhase("InProgress")
+	_, body = get(t, ts, "/champ-select")
+	expect(t, body, "In game")
+	if strings.Contains(body, "Build vs") {
+		t.Error("build shown without a champ select")
+	}
+}

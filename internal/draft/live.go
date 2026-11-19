@@ -101,20 +101,20 @@ func (v view) String() string {
 	return b.String()
 }
 
-// runeResult is a rune page and the summoner spells from the same OP.GG
+// runeResult is a rune page and the spells and items from the same OP.GG
 // response.
 type runeResult struct {
-	page   meta.RunePage
-	spells meta.Choice // zero if OP.GG listed none
-	vs     string      // the opponent the page is for, "" for the champion's usual page
-	ok     bool
+	page  meta.RunePage
+	build meta.Build
+	vs    string // the opponent the page is for, "" for the champion's usual page
+	ok    bool
 }
 
 // String is the page and spells in one line.
 func (r runeResult) String() string {
 	s := r.page.String()
-	if len(r.spells.IDs) > 0 {
-		s += "; spells " + meta.SpellNames(r.spells.IDs)
+	if sp, ok := r.build.TopSpells(); ok {
+		s += "; spells " + meta.SpellNames(sp.IDs)
 	}
 	return s
 }
@@ -273,7 +273,7 @@ func (l *Live) render(s lcu.Session, at time.Time) (view, Board) {
 		b.Picks = []Pick{l.pick(champ, forMe, position, opp)}
 		return view{
 			head:  fmt.Sprintf("locked in %s (%s)", l.name(champ), meta.PositionName(position)),
-			items: []viewItem{{name: l.name(champ), runes: l.runeLine(champ, opp, position)}},
+			items: []viewItem{{name: l.name(champ), runes: l.runeLine(champ, opp, position) + l.buildLine(champ, opp, position)}},
 		}, b
 	}
 
@@ -318,6 +318,17 @@ func (l *Live) runeLine(champ, opp, position string) string {
 		return "vs " + l.name(r.vs) + ": " + r.String()
 	}
 	return "(usual page): " + r.String()
+}
+
+// buildLine is "; build ..." for champ into opp once it's fetched, else "".
+func (l *Live) buildLine(champ, opp, position string) string {
+	l.mu.Lock()
+	r, ok := l.runes[champ+"/"+opp+"/"+position]
+	l.mu.Unlock()
+	if !ok || !r.ok || r.build.Empty() {
+		return ""
+	}
+	return "; build " + r.build.String()
 }
 
 // runeFor returns the rune page for champ into opp, and whether it's
@@ -366,14 +377,12 @@ func (l *Live) fetchRunes(champ, opp, position string) {
 		r := runeResult{}
 		if opp != "" {
 			if m, err := l.Meta.Matchup(l.ctx, champ, opp, position); err == nil && len(m.Runes) > 0 {
-				r = runeResult{page: m.Runes[0], vs: opp, ok: true}
-				r.spells, _ = m.Build.TopSpells()
+				r = runeResult{page: m.Runes[0], build: m.Build, vs: opp, ok: true}
 			}
 		}
 		if !r.ok {
 			if a, err := l.Meta.Analysis(l.ctx, champ, position); err == nil && len(a.Runes.Primary) > 0 {
-				r = runeResult{page: a.Runes, ok: true}
-				r.spells, _ = a.Build.TopSpells()
+				r = runeResult{page: a.Runes, build: a.Build, ok: true}
 			} else if err != nil && !errors.Is(err, meta.ErrNoData) && l.ctx.Err() == nil {
 				l.Log.Printf("OP.GG runes for %s %s: %v", l.name(champ), meta.PositionName(position), err)
 			}

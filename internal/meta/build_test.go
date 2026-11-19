@@ -3,6 +3,7 @@ package meta
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -27,6 +28,13 @@ func TestAnalysisBuild(t *testing.T) {
 	}
 	if len(a.Build.Boots) != 1 || a.Build.Boots[0].IDs[0] != 3111 || len(a.Build.Starter) != 1 || a.Build.Starter[0].IDs[0] != 1056 {
 		t.Errorf("boots %+v, starter %+v", a.Build.Boots, a.Build.Starter)
+	}
+	wantBuild := "Doran's Ring + Health Potion x2 > Mercury's Treads > Hextech Rocketbelt, Imperial Mandate, Zhonya's Hourglass; max Q > W > E"
+	if got := a.Build.String(); got != wantBuild {
+		t.Errorf("build\n got %s\nwant %s", got, wantBuild)
+	}
+	if len(a.Build.Skills) != 1 || len(a.Build.Skills[0].Order) != 15 || a.Build.Skills[0].Order[5] != "R" {
+		t.Errorf("skills %+v", a.Build.Skills)
 	}
 	// The fields are asked for.
 	var fields []string
@@ -64,6 +72,12 @@ func TestMatchupBuild(t *testing.T) {
 	if len(m.Build.Core) == 0 || len(m.Build.Boots) == 0 || len(m.Build.Starter) == 0 {
 		t.Errorf("items: %d core, %d boots, %d starter", len(m.Build.Core), len(m.Build.Boots), len(m.Build.Starter))
 	}
+	if len(m.Build.Skills) == 0 || len(m.Build.Max) == 0 || len(m.Build.Core[0].Names) != len(m.Build.Core[0].IDs) {
+		t.Errorf("skills %d, max %d, core %+v", len(m.Build.Skills), len(m.Build.Max), m.Build.Core[0])
+	}
+	if s := m.Build.String(); !strings.Contains(s, " > ") || !strings.Contains(s, "; max ") {
+		t.Errorf("matchup build: %s", s)
+	}
 }
 
 func TestSpellNames(t *testing.T) {
@@ -72,5 +86,18 @@ func TestSpellNames(t *testing.T) {
 	}
 	if got := SpellNames([]int{11, 99}); got != "Smite + 99" {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestBuildStringPartial(t *testing.T) {
+	b := Build{Core: []Choice{{IDs: []int{3152, 9999}, Names: []string{"Hextech Rocketbelt"}}}}
+	if got := b.String(); got != "Hextech Rocketbelt, 9999" {
+		t.Errorf("got %q", got)
+	}
+	if !(Build{}).Empty() || b.Empty() {
+		t.Error("Empty")
+	}
+	if got := (Build{}).String(); got != "" {
+		t.Errorf("empty build: %q", got)
 	}
 }
