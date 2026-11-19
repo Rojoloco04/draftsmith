@@ -42,7 +42,7 @@ The overlay is built (2026-11-18, see "Overlay" in the Phase 3 section): `serve 
 
 **Next up (asked by the user 2026-11-18, in this order):**
 
-1. Summoner spell recommendations in champ select (next to the rune page on each pick card).
+1. ~~Summoner spell recommendations in champ select~~: done 2026-11-18, see "Spells and builds" in the Phase 3 section.
 2. Multiple accounts: track more than one Riot ID (first addition: `Rojoloco#SLU`). Today the archive, state, index and dashboard assume one PUUID.
 3. Build recommendations in game. This relaxes the old "nothing during the game" rule; see the compliance rules.
 
@@ -195,6 +195,13 @@ Champ select page (2026-11-18):
 - Plumbing: the stream clears the server's 60s write deadline with `http.ResponseController` (the request logger's recorder has `Unwrap` for this), and `serve` sets `BaseContext` so open streams end on shutdown instead of holding it for the 5s timeout.
 - `lcu.Timer` now reads `isInfinite` (no countdown when set).
 - Checked by hand during a real ranked game: bans, lane odds, locked pick with matchup runes, countdown, and the switch to "In game" when it loaded. Headless Chrome screenshots need `--timeout=3000`, not `--virtual-time-budget` (the open event stream crashes the renderer with the latter).
+
+Spells and builds (2026-11-18):
+
+- `meta.Build` holds summoner spells, starter items, boots and core items as `meta.Choice` (ids, play, win, pick rate). The lane matchup guide already returned all of them (several options each, for that matchup); champion analysis now asks for them too and returns one option each (the most played), so `analysisVersion` is `v3`. The analysis's `ids_names` for spells are ids, not names, so spell names come from a fixed table (`meta.SpellName`), like the rune trees.
+- Each pick's spells come with its rune page from the same response: the matchup's top pair when my laner is 50%+ likely, else the champion's usual pair. `watch` logs them after the page ("; spells Flash + Teleport"); the pick card shows a Spells row with the pick rate.
+- The guide also has `skills` (level-by-level order), `last_items`, `single_items` and `combination_items` by build depth; the in-game build can use those.
+- Test fixture `internal/opgg/testdata/analysis_galio_mid_build.txt` is a real v3 analysis (patch 16.23).
 
 Overlay (2026-11-18):
 

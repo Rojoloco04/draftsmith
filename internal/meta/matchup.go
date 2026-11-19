@@ -24,6 +24,9 @@ type Matchup struct {
 	// Runes are the most played pages in this matchup, most played first.
 	// Empty in a mirror request.
 	Runes []RunePage
+	// Build is the summoner spells and items played in this matchup.
+	// Empty in a mirror request.
+	Build Build
 	// Tip, LaneAdvantage ("EVEN" or a champion name) and PlayStyle
 	// ("defensive", ...) are OP.GG's notes on the matchup.
 	Tip, LaneAdvantage, PlayStyle string
@@ -49,6 +52,7 @@ func (s *Service) Matchup(ctx context.Context, key, opponent, position string) (
 	}
 	type response struct {
 		Data struct {
+			Build
 			Counters      []counter  `json:"counters"`
 			Runes         []RunePage `json:"runes"`
 			Tip           string     `json:"opponent_champion_tip"`
@@ -79,7 +83,7 @@ func (s *Service) Matchup(ctx context.Context, key, opponent, position string) (
 	}
 	m := Matchup{
 		Freshness: fr, Key: key, Opponent: opponent, Position: position,
-		Runes: resp.Data.Runes, Tip: resp.Data.Tip, LaneAdvantage: resp.Data.LaneAdvantage, PlayStyle: resp.Data.PlayStyle,
+		Runes: resp.Data.Runes, Build: resp.Data.Build, Tip: resp.Data.Tip, LaneAdvantage: resp.Data.LaneAdvantage, PlayStyle: resp.Data.PlayStyle,
 	}
 	champs, cerr := s.Champions(ctx)
 	if cerr != nil {

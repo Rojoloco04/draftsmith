@@ -103,6 +103,9 @@
   </ul>
   {{end}}
 
+  {{if and (eq $p.RunesState "ok") $p.Spells.IDs}}
+  <div class="spell-row cs-spells"><span class="label">Spells</span>{{range $p.Spells.IDs}}{{template "spell" (dict "ID" . "Patch" $.Patch)}}<span>{{spellName .}}</span>{{end}}<span class="muted small">{{pct $p.Spells.PickRate}} pick{{if $p.RunesVs.Key}} vs {{$p.RunesVs.Name}}{{end}}</span></div>
+  {{end}}
   <details class="cs-runes" data-key="{{$p.Key}}"{{if eq .I 0}} open{{end}}>
     <summary>
       <span class="label">Runes {{if eq $p.RunesState "ok"}}{{if $p.RunesVs.Key}}vs {{$p.RunesVs.Name}}{{else}}· usual page{{end}}{{end}}</span>

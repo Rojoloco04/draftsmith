@@ -13,6 +13,7 @@ import (
 
 	"github.com/rojoloco04/draftsmith/internal/analysis"
 	"github.com/rojoloco04/draftsmith/internal/lcu"
+	"github.com/rojoloco04/draftsmith/internal/meta"
 )
 
 // syncBuffer is a log sink safe to read while Live writes from its fetcher.
@@ -124,6 +125,7 @@ func TestLiveRealChampSelect(t *testing.T) {
 		t.Errorf("first answer should not wait for OP.GG:\n%s", first)
 	}
 	waitFor(t, out, "runes vs Katarina: Sorcery: Stormraider's Surge")
+	waitFor(t, out, "Adaptive Force, Adaptive Force, Health; spells Flash + Teleport")
 	logs := waitFor(t, out, "runes (usual page)")
 	last := logs[strings.LastIndex(logs, "suggestions (Mid):"):]
 	for _, want := range []string{
@@ -146,7 +148,7 @@ func TestLiveRealChampSelect(t *testing.T) {
 		t.Fatalf("board: position %q, locked %v, %d picks", b.Position, b.Locked, len(b.Picks))
 	}
 	if p := b.Picks[0]; p.Name != "Galio" || !p.Scored || p.RunesState != RunesOK || p.RunesVs.Name != "Katarina" ||
-		len(p.Vs) == 0 || p.Vs[0].Name != "Katarina" || p.Vs[0].Odds < 0.99 {
+		len(p.Vs) == 0 || p.Vs[0].Name != "Katarina" || p.Vs[0].Odds < 0.99 || meta.SpellNames(p.Spells.IDs) != "Flash + Teleport" {
 		t.Errorf("first pick: %+v", p)
 	}
 	if p := b.Picks[1]; p.Name != "Vladimir" || p.RunesState != RunesOK || p.RunesVs.Key != "" {

@@ -101,10 +101,22 @@ func (v view) String() string {
 	return b.String()
 }
 
+// runeResult is a rune page and the summoner spells from the same OP.GG
+// response.
 type runeResult struct {
-	page meta.RunePage
-	vs   string // the opponent the page is for, "" for the champion's usual page
-	ok   bool
+	page   meta.RunePage
+	spells meta.Choice // zero if OP.GG listed none
+	vs     string      // the opponent the page is for, "" for the champion's usual page
+	ok     bool
+}
+
+// String is the page and spells in one line.
+func (r runeResult) String() string {
+	s := r.page.String()
+	if len(r.spells.IDs) > 0 {
+		s += "; spells " + meta.SpellNames(r.spells.IDs)
+	}
+	return s
 }
 
 // Start loads the tier list and begins the background fetcher; it stops
@@ -303,9 +315,9 @@ func (l *Live) runeLine(champ, opp, position string) string {
 		return "(none on OP.GG)"
 	}
 	if r.vs != "" {
-		return "vs " + l.name(r.vs) + ": " + r.page.String()
+		return "vs " + l.name(r.vs) + ": " + r.String()
 	}
-	return "(usual page): " + r.page.String()
+	return "(usual page): " + r.String()
 }
 
 // runeFor returns the rune page for champ into opp, and whether it's
@@ -355,11 +367,13 @@ func (l *Live) fetchRunes(champ, opp, position string) {
 		if opp != "" {
 			if m, err := l.Meta.Matchup(l.ctx, champ, opp, position); err == nil && len(m.Runes) > 0 {
 				r = runeResult{page: m.Runes[0], vs: opp, ok: true}
+				r.spells, _ = m.Build.TopSpells()
 			}
 		}
 		if !r.ok {
 			if a, err := l.Meta.Analysis(l.ctx, champ, position); err == nil && len(a.Runes.Primary) > 0 {
 				r = runeResult{page: a.Runes, ok: true}
+				r.spells, _ = a.Build.TopSpells()
 			} else if err != nil && !errors.Is(err, meta.ErrNoData) && l.ctx.Err() == nil {
 				l.Log.Printf("OP.GG runes for %s %s: %v", l.name(champ), meta.PositionName(position), err)
 			}

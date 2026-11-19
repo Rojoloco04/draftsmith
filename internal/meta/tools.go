@@ -260,6 +260,8 @@ type Analysis struct {
 	Rank       int
 	DamageType string // AD, AP, BOTH
 	Runes      RunePage
+	// Build is the most played summoner spells and items.
+	Build Build
 	// Good are the opponents this champion does best into, Bad the ones
 	// that counter it (OP.GG lists three of each).
 	Good []Counter
@@ -271,8 +273,8 @@ var ErrNoData = errors.New("OP.GG has no data for that champion and position")
 
 // analysisVersion is part of the analysis cache key. Bump it when the
 // requested fields change, so copies cached without them are fetched again
-// rather than served for a day. v2 added rune names.
-const analysisVersion = "v2"
+// rather than served for a day. v2 added rune names, v3 spells and items.
+const analysisVersion = "v3"
 
 // Analysis returns OP.GG's stats, counters and runes for a champion (Riot
 // key) in a position, for the Emerald+ bracket.
@@ -297,6 +299,7 @@ func (s *Service) Analysis(ctx context.Context, key, position string) (Analysis,
 					Rank     int     `json:"rank"`
 				} `json:"average_stats"`
 			} `json:"summary"`
+			analysisBuild
 			DamageType string    `json:"damage_type"`
 			Strong     []counter `json:"strong_counters"`
 			Weak       []counter `json:"weak_counters"`
@@ -315,14 +318,14 @@ func (s *Service) Analysis(ctx context.Context, key, position string) (Analysis,
 		tool: "lol_get_champion_analysis",
 		args: map[string]any{
 			"game_mode": "ranked", "champion": champ, "position": position, "tier": Bracket,
-			"desired_output_fields": []string{
+			"desired_output_fields": append([]string{
 				"data.summary.average_stats.{play,win_rate,pick_rate,ban_rate,tier,rank}",
 				"data.runes.{primary_page_id,primary_rune_ids[],primary_rune_names[],secondary_page_id,secondary_rune_ids[],secondary_rune_names[],stat_mod_ids[],play,win,pick_rate}",
 				"data.strong_counters[].{champion_name,play,win}",
 				"data.weak_counters[].{champion_name,play,win}",
 				"data.damage_type",
 				"data.trends.win.{version}",
-			},
+			}, buildFields...),
 		},
 		maxAge: AnalysisMaxAge,
 		decode: func(body string) (string, error) {
@@ -344,7 +347,7 @@ func (s *Service) Analysis(ctx context.Context, key, position string) (Analysis,
 	a := Analysis{
 		Freshness: fr, Key: key, Position: position, Bracket: Bracket,
 		Play: st.Play, WinRate: st.WinRate, PickRate: st.PickRate, BanRate: st.BanRate, Tier: st.Tier, Rank: st.Rank,
-		DamageType: d.DamageType, Runes: d.Runes,
+		DamageType: d.DamageType, Runes: d.Runes, Build: d.build(),
 	}
 	champs, cerr := s.Champions(ctx)
 	if cerr != nil {

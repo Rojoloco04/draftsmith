@@ -43,6 +43,7 @@ func testBoard() draft.Board {
 				Champ: draft.Champ{Key: "Galio", Name: "Galio"}, Suggestion: galio, Scored: true, Reason: "Galio 58%: you're 6-2 on it",
 				Vs:    []draft.Versus{{Champ: kat, Odds: 0.97, WinRate: 0.53, Games: 4213}},
 				Runes: page, RunesVs: kat, RunesState: draft.RunesOK,
+				Spells: meta.Choice{IDs: []int{4, 12}, Play: 3441, Win: 1773, PickRate: 0.6706},
 			},
 			{
 				Champ: draft.Champ{Key: "Vladimir", Name: "Vladimir"}, Suggestion: vlad, Scored: true,
@@ -82,6 +83,7 @@ func TestChampSelectPage(t *testing.T) {
 		"Banned: Zed", "Banned: LeBlanc",
 		"Galio", "58%", "You're 6-2 on it", "51.0%", "53.0%</strong> into Katarina", "4.2k games",
 		"Runes vs Katarina", "Arcane Comet",
+		`class="spell-row cs-spells"`, "<span>Flash</span>", "<span>Teleport</span>", "67% pick vs Katarina",
 		"Vladimir", "not on OP.GG's Mid list", "No matchup data vs Katarina", "Loading from OP.GG",
 	)
 
