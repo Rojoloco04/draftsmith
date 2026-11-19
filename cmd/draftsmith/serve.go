@@ -31,6 +31,9 @@ func cmdServe(ctx context.Context, args []string) error {
 	noTimelines := fs.Bool("no-timelines", false, "skip timelines when syncing")
 	noMeta := fs.Bool("no-meta", false, "don't fetch OP.GG meta data (tier list, champion analysis)")
 	opggEndpoint := fs.String("opgg-endpoint", opgg.DefaultEndpoint, "OP.GG MCP endpoint")
+	watchClient := fs.Bool("watch", false, "follow the League client on this PC and show champ select live on the dashboard")
+	leagueDir := fs.String("league-dir", env("DRAFTSMITH_LEAGUE_DIR", ""), "with --watch: League install directory (default: the standard install location)")
+	minGames := fs.Int("min-games", 2, "with --watch: suggest only champions with at least this many games in your lane")
 	fs.Parse(args)
 
 	if err := checkListenAddr(*addr); err != nil {
@@ -100,8 +103,9 @@ func cmdServe(ctx context.Context, args []string) error {
 		s.LastSync = st.LastSync
 		s.SyncDisabled = disabled
 	})
+	var m *meta.Service
 	if !*noMeta {
-		m := meta.New(d, *opggEndpoint)
+		m = meta.New(d, *opggEndpoint)
 		srv.SetMeta(m)
 		// Warm the cache so the first visit to the tier list doesn't wait.
 		go func() {
@@ -117,6 +121,28 @@ func cmdServe(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	if *watchClient {
+		srv.WatchStarted("")
+		go func() {
+			o := watchOpts{leagueDir: *leagueDir, minGames: *minGames, suggest: true, onBoard: srv.WatchBoard}
+			w, note := newWatcher(ctx, d, m, o, logger)
+			if note != "" {
+				logger.Printf("champ select suggestions off: %s", note)
+				srv.WatchStarted(note)
+			}
+			onPhase := w.OnPhase
+			w.OnPhase = func(p string) {
+				if onPhase != nil {
+					onPhase(p)
+				}
+				srv.WatchPhase(p)
+			}
+			if err := w.Run(ctx); err != nil {
+				logger.Printf("watch: %v", err)
+			}
+		}()
+	}
+
 	hs := &http.Server{
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -124,6 +150,9 @@ func cmdServe(ctx context.Context, args []string) error {
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		ErrorLog:          logger,
+		// Requests end with serve, so champ select streams don't hold up
+		// shutdown.
+		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
 	logger.Printf("dashboard for %s at http://%s", st.RiotID, ln.Addr())
 

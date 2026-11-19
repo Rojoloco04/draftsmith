@@ -80,10 +80,24 @@ func TestLiveRealChampSelect(t *testing.T) {
 	mine = append(mine, games("Yasuo", "MIDDLE", 3, 0)...)   // a teammate locked it
 	mine = append(mine, games("Leblanc", "MIDDLE", 2, 2)...) // banned
 	out := &syncBuffer{}
+	var (
+		bmu    sync.Mutex
+		boards []Board
+	)
+	lastBoard := func() Board {
+		bmu.Lock()
+		defer bmu.Unlock()
+		return boards[len(boards)-1]
+	}
 	l := &Live{
 		Meta: src, Games: mine, Base: 0.5, MinGames: 2,
 		Key: func(id int) string { return byID[id] }, Name: func(k string) string { return names[k] },
 		Log: log.New(out, "", 0),
+		OnBoard: func(b Board) {
+			bmu.Lock()
+			boards = append(boards, b)
+			bmu.Unlock()
+		},
 	}
 	l.Start(ctx)
 
@@ -126,14 +140,66 @@ func TestLiveRealChampSelect(t *testing.T) {
 		}
 	}
 
+	// The dashboard's board says the same, with the rest of the draft.
+	b := lastBoard()
+	if b.Position != "mid" || b.Locked || len(b.Picks) != 2 {
+		t.Fatalf("board: position %q, locked %v, %d picks", b.Position, b.Locked, len(b.Picks))
+	}
+	if p := b.Picks[0]; p.Name != "Galio" || !p.Scored || p.RunesState != RunesOK || p.RunesVs.Name != "Katarina" ||
+		len(p.Vs) == 0 || p.Vs[0].Name != "Katarina" || p.Vs[0].Odds < 0.99 {
+		t.Errorf("first pick: %+v", p)
+	}
+	if p := b.Picks[1]; p.Name != "Vladimir" || p.RunesState != RunesOK || p.RunesVs.Key != "" {
+		t.Errorf("second pick: %+v", p)
+	}
+	if len(b.MyTeam) != 5 || len(b.TheirTeam) != 5 {
+		t.Fatalf("teams: %d and %d", len(b.MyTeam), len(b.TheirTeam))
+	}
+	var lanes []string
+	for _, sl := range b.MyTeam {
+		lanes = append(lanes, sl.Position)
+		if sl.Me && (sl.Position != "mid" || sl.Locked) {
+			t.Errorf("my slot: %+v", sl)
+		}
+		if !sl.Me && (!sl.Locked || sl.Key == "") {
+			t.Errorf("teammate should be locked: %+v", sl)
+		}
+	}
+	if got := strings.Join(lanes, " "); got != "top jungle mid adc support" {
+		t.Errorf("my team order: %s", got)
+	}
+	foundKat := false
+	for _, sl := range b.TheirTeam {
+		if sl.Name == "Katarina" {
+			foundKat = sl.Position == "mid" && sl.Odds > 0.99 && sl.Locked
+		}
+	}
+	if !foundKat {
+		t.Errorf("their team: %+v", b.TheirTeam)
+	}
+	if len(b.MyBans)+len(b.TheirBans) == 0 || b.Phase == "" {
+		t.Errorf("bans %v / %v, phase %q", b.MyBans, b.TheirBans, b.Phase)
+	}
+
 	// Locked in: just my champion's page for the matchup.
 	l.Update(final)
 	waitFor(t, out, "locked in Galio (Mid); runes vs Katarina: Sorcery: Stormraider's Surge")
+	if b := lastBoard(); !b.Locked || len(b.Picks) != 1 || b.Picks[0].Name != "Galio" || b.Picks[0].RunesState != RunesOK {
+		t.Errorf("locked board: %+v", b)
+	}
 
 	// Nothing new, nothing logged.
 	n := len(out.String())
+	bmu.Lock()
+	nb := len(boards)
+	bmu.Unlock()
 	l.Update(final)
 	time.Sleep(50 * time.Millisecond)
+	bmu.Lock()
+	if len(boards) != nb {
+		t.Errorf("an unchanged update pushed %d more boards", len(boards)-nb)
+	}
+	bmu.Unlock()
 	if len(out.String()) != n {
 		t.Errorf("an unchanged update logged again:\n%s", out.String()[n:])
 	}

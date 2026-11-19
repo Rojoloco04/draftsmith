@@ -56,6 +56,7 @@ type Server struct {
 	mu      sync.Mutex
 	status  Status
 	refresh func() bool
+	cs      champSelect
 }
 
 // New builds a server over an indexed database. riotID is the tracked
@@ -65,7 +66,7 @@ func New(d *db.DB, riotID string, logger *log.Logger) (*Server, error) {
 		logger = log.New(io.Discard, "", 0)
 	}
 	s := &Server{db: d, riotID: riotID, log: logger, pages: map[string]*template.Template{}}
-	for _, p := range []string{"overview", "matches", "match", "champions", "champion", "tierlist", "soon", "error"} {
+	for _, p := range []string{"overview", "matches", "match", "champions", "champion", "tierlist", "champselect", "error"} {
 		t, err := template.New(p).Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/parts.html", "templates/"+p+".html")
 		if err != nil {
 			return nil, fmt.Errorf("template %s: %w", p, err)
@@ -116,7 +117,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /tier-list", s.tierListPage)
 	mux.HandleFunc("GET /sync", s.syncStatus)
 	mux.HandleFunc("POST /sync", s.syncNow)
-	mux.HandleFunc("GET /champ-select", s.soon("Champ select", "champ-select", "The live champ select helper arrives with `draftsmith watch` in Phase 3."))
+	mux.HandleFunc("GET /champ-select", s.champSelectPage)
+	mux.HandleFunc("GET /champ-select/events", s.champSelectEvents)
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusNotFound, errors.New("page not found"))
 	})
@@ -249,15 +251,6 @@ func (s *Server) syncStatus(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "overview", "sync", v)
 }
 
-func (s *Server) soon(title, nav, msg string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		s.render(w, r, "soon", "", struct {
-			Base
-			Message string
-		}{s.base(r, title, nav), msg})
-	}
-}
-
 // isPartial reports whether htmx asked for a fragment rather than a page.
 // Boosted requests and history restores want the whole page.
 func isPartial(r *http.Request) bool {
@@ -294,6 +287,10 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.code = code
 	r.ResponseWriter.WriteHeader(code)
 }
+
+// Unwrap lets http.ResponseController reach the real writer (to flush
+// event streams).
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
 func logRequests(l *log.Logger, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

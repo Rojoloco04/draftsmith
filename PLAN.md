@@ -36,7 +36,9 @@ UI refresh (on `phase3-watch`, 2026-11-17): new stylesheet (sticky header with i
 
 UI direction (from the user, 2026-11-17): they like the refresh as a baseline but want to "get crazier" later with something more innovative, not just a cleaner OP.GG clone. Ideas to bring to that session, none decided: a death heatmap across games on the rift, a champion pool "constellation" or matchup grid instead of tables, animated LP/form timelines, per-game story views (gold swing moments from the timeline), and a champ select page that feels like an overlay rather than a dashboard. Ask before committing to one; the user picks the direction.
 
-**Next up:** the dashboard's champ select page, fed live by `watch` (SSE), then the overlay: a borderless always-on-top window docked to the League client that shows that page during champ select only. See "Overlay" in the Phase 3 section. Team comp gaps (damage mix, frontline) are not in the score yet.
+The dashboard's champ select page is done (2026-11-18, see "Champ select page" in the Phase 3 section): `serve --watch` runs the watcher in the same process and the page follows it over SSE. Checked live against a real ranked champ select.
+
+**Next up:** the overlay: a borderless always-on-top window docked to the League client that shows the champ select page during champ select only. See "Overlay" in the Phase 3 section. Team comp gaps (damage mix, frontline) are not in the score yet.
 
 Handoff notes (things a new session would otherwise rediscover):
 
@@ -177,6 +179,15 @@ Suggestions (`internal/draft`, 2026-11-17):
 - **Runes**: the top matchup page when my laner is 50%+ likely, else the champion's usual page from champion analysis (which now also asks for rune names; its cache key has a version, `analysisVersion`, so older copies are re-fetched). Tree and stat shard names are a small fixed table in `meta`. Nothing is imported into the client yet; that stays button-only.
 - `watch` output: the ranking as a block when it changes, then one line per rune page as it arrives. After I lock in, only my champion's page for the likely matchup.
 
+Champ select page (2026-11-18):
+
+- **Same process, decided:** `serve --watch` (with `--league-dir`, `--min-games`) runs the watcher inside `serve`, since the archive, `.env` and League all live on this PC. That settles the open decision below for `serve` and `watch`; Quartermaster is still open. `draftsmith watch` stays as the terminal version and shares its setup (`newWatcher` in `cmd/draftsmith/watch.go`).
+- `draft.Live.OnBoard` gets a `draft.Board` whenever anything on it changes (compared by a `%+v` fingerprint, since boards hold NaNs): phase, the countdown's end, both teams (mine in lane order, theirs with each slot's likeliest lane from `draft.Roles`), bans, and up to three `Pick`s with numbers, matchups and rune state (`loading`/`none`/`ok`), or just mine once locked. The log output is unchanged.
+- `web`: `Server.WatchStarted/WatchPhase/WatchBoard` feed it; `/champ-select` renders it and `/champ-select/events` streams the rendered `board` fragment as an SSE event on connect and on every change, with a keep-alive comment every 20s. `app.js` swaps the fragment in, keeps folded/open rune pages as they were, counts the timer down locally, and dims the board while `EventSource` reconnects. A board that arrives outside ChampSelect (a late rune fetch) is dropped; leaving ChampSelect clears it.
+- Plumbing: the stream clears the server's 60s write deadline with `http.ResponseController` (the request logger's recorder has `Unwrap` for this), and `serve` sets `BaseContext` so open streams end on shutdown instead of holding it for the 5s timeout.
+- `lcu.Timer` now reads `isInfinite` (no countdown when set).
+- Checked by hand during a real ranked game: bans, lane odds, locked pick with matchup runes, countdown, and the switch to "In game" when it loaded. Headless Chrome screenshots need `--timeout=3000`, not `--virtual-time-budget` (the open event stream crashes the renderer with the latter).
+
 Overlay (asked 2026-11-17, not built):
 
 - Plan: a separate borderless, always-on-top window (WebView2, Windows only) that shows the dashboard's champ select page, positioned against the League client's window and following it, shown only during ChampSelect and hidden otherwise. Quick version first: the champ select page in an Edge `--app=` window, kept on top by the user.
@@ -189,7 +200,7 @@ Plan from here:
 - From the session use only: my cell and assigned position, my team's picks and hovers, enemy picks once visible, bans, and the action timer. Verify field names against the real client.
 - Suggestions: score champions from my pool for my assigned role using my adjusted win rate and games played, OP.GG tier, OP.GG counter data vs visible enemy laner, and team comp gaps (damage type, frontline). Show the top 3 with one-line reasons.
 - Runes: show OP.GG's recommended page for the suggested or hovered champion. Importing it into the client (`/lol-perks/v1/pages`) only happens when I click a button. Verify endpoint behavior and the page limit on the real client.
-- Push state to `serve` (same process if Quartermaster runs on this PC, otherwise HTTP over Tailscale).
+- ~~Push state to `serve`~~: done in process with `serve --watch` (see "Champ select page").
 
 ### Compliance rules (non-negotiable)
 
@@ -212,7 +223,7 @@ Plan from here:
 
 ## Open decisions
 
-- **Does Quartermaster run on the same PC as League?** If yes, `serve` and `watch` can be one process.
+- **Does Quartermaster run on the same PC as League?** `serve` and `watch` are one process now (`serve --watch`); this only decides where Quartermaster lives.
 - ~~**Storage for the dashboard**~~: resolved 2026-11-17, SQLite (`modernc.org/sqlite`) as a rebuildable index over the raw JSON archive. See Phase 1.
 - ~~**OP.GG tier filter**~~: resolved. The tier list is fixed at Emerald+ (fine for me); per-champion analysis accepts `tier` (e.g. `emerald_plus`, `master_plus`).
 - **Riot product approval**: personal key registered as "Draftsmith"; if Riot asks for changes, update this file.

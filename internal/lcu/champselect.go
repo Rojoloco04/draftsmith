@@ -62,6 +62,7 @@ type Timer struct {
 	AdjustedTimeLeftInPhase int64  `json:"adjustedTimeLeftInPhase"` // ms
 	TotalTimeInPhase        int64  `json:"totalTimeInPhase"`        // ms
 	InternalNowInEpochMs    int64  `json:"internalNowInEpochMs"`
+	IsInfinite              bool   `json:"isInfinite"`
 }
 
 // Me returns my own slot.

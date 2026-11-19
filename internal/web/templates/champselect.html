@@ -1,0 +1,116 @@
+{{define "content"}}
+<div id="cs" class="cs" data-stream="/champ-select/events">
+{{template "board" .CS}}
+</div>
+{{end}}
+
+{{/* The live part of the page (csView). It's rendered on load and again
+     for every server-sent event, which replaces #cs's contents. */}}
+{{define "board"}}
+{{if not .On}}
+<section class="card empty">
+  <h1>Champ select</h1>
+  <p>This page follows the League client on the PC it runs on. Start the dashboard there with <code>draftsmith serve --watch</code>.</p>
+  <p class="muted">For the same suggestions in a terminal, run <code>draftsmith watch</code>.</p>
+</section>
+{{else if not .Have}}
+<section class="card empty cs-wait">
+  <span class="cs-status{{if .Phase}} up{{end}}"><span class="dot"></span>{{clientPhase .Phase}}</span>
+  <h1>Champ select</h1>
+  <p class="muted">Your teams, suggestions and runes show up here as soon as champ select starts.</p>
+  {{with .Note}}<p class="neg">Suggestions are off: {{.}}</p>{{end}}
+</section>
+{{else}}{{$left := .Left}}{{with .Board}}{{$patch := .Patch}}
+<div class="cs-head">
+  <div class="cs-phase">
+    <span class="label">{{csPhase .Phase}}</span>
+    {{if $left}}<strong class="cs-timer" data-left="{{$left}}"></strong>{{end}}
+  </div>
+  {{with .Position}}<span class="cs-lane">{{template "role" .}}<span>{{pos .}}</span></span>{{end}}
+</div>
+<div class="cs-grid">
+  <section class="cs-team ally" aria-label="Your team">
+    {{template "bans" (dict "Bans" .MyBans "Patch" $patch)}}
+    {{range .MyTeam}}{{template "slot" (dict "S" . "Patch" $patch "Enemy" false)}}{{end}}
+  </section>
+
+  <section class="cs-picks" aria-label="{{if .Locked}}Your pick{{else}}Suggestions{{end}}">
+    {{with .Note}}<div class="card empty"><p>{{.}}</p></div>{{end}}
+    {{range $i, $p := .Picks}}{{template "pickCard" (dict "P" $p "I" $i "Patch" $patch "Locked" $.Board.Locked "Position" $.Board.Position)}}{{end}}
+  </section>
+
+  <section class="cs-team enemy" aria-label="Enemy team">
+    {{template "bans" (dict "Bans" .TheirBans "Patch" $patch)}}
+    {{range .TheirTeam}}{{template "slot" (dict "S" . "Patch" $patch "Enemy" true)}}{{end}}
+  </section>
+</div>
+{{end}}{{end}}
+{{end}}
+
+{{/* One team's bans (dict Bans, Patch). */}}
+{{define "bans"}}
+<div class="cs-bans">
+  {{range .Bans}}<span class="icon ban" data-initials="{{initials .Name}}" title="Banned: {{.Name}}">{{if .Key}}<img src="{{champImg .Key $.Patch}}" alt="" width="26" height="26">{{end}}</span>
+  {{else}}<span class="muted small">No bans yet</span>{{end}}
+</div>
+{{end}}
+
+{{/* One player's slot (dict S draft.Slot, Patch, Enemy). Champions and
+     lanes only: the board never has anyone's name. */}}
+{{define "slot"}}{{$s := .S}}
+<div class="cs-slot{{if $s.Me}} me{{end}}{{if $s.Locked}} locked{{else if $s.Key}} hover{{else}} open{{end}}">
+  <span class="icon lg" data-initials="{{initials $s.Name}}">{{if $s.Key}}<img src="{{champImg $s.Key $.Patch}}" alt="" width="48" height="48">{{end}}</span>
+  <span class="cs-slot-text">
+    <strong>{{if $s.Name}}{{$s.Name}}{{else if $s.Me}}You{{else}}<span class="muted">Picking…</span>{{end}}</strong>
+    <span class="muted role-line">
+      {{if $s.Position}}{{template "role" $s.Position}}{{pos $s.Position}}{{if $.Enemy}} {{pct $s.Odds}}{{end}}{{end}}
+      {{if $s.Me}}<b class="tag">You</b>{{end}}{{if $s.Autofill}}<b class="tag">Autofill</b>{{end}}{{if and $s.Key (not $s.Locked)}}<b class="tag soft">Hover</b>{{end}}
+    </span>
+  </span>
+</div>
+{{end}}
+
+{{/* A suggestion or my locked pick (dict P draft.Pick, I, Patch, Locked,
+     Position). The first card opens its rune page; the rest fold it. */}}
+{{define "pickCard"}}{{$p := .P}}
+<article class="card cs-pick{{if eq .I 0}} first{{end}}">
+  <header class="cs-pick-head">
+    {{if not .Locked}}<span class="cs-rank">{{add .I 1}}</span>{{end}}
+    <span class="icon xl" data-initials="{{initials $p.Name}}"><img src="{{champImg $p.Key .Patch}}" alt="" width="72" height="72"></span>
+    <div class="cs-pick-name">
+      {{if .Locked}}<span class="label">Locked in</span>{{end}}
+      <h2>{{$p.Name}}</h2>
+      {{if $p.Scored}}<span class="muted">You're {{$p.Wins}}-{{sub $p.Games $p.Wins}} on it {{pos .Position}}
+        · {{if $p.InMeta}}{{template "tierBadge" $p.Meta.Tier}} {{pct1 $p.MetaWinRate}} Emerald+{{else}}not on OP.GG's {{pos .Position}} list{{end}}</span>
+      {{else}}<span class="muted">Not in your pool {{pos .Position}} yet.</span>{{end}}
+      {{if $p.TeammateHovering}}<span class="tag warn">A teammate is hovering it</span>{{end}}
+    </div>
+    {{if $p.Scored}}<div class="cs-score" title="{{$p.Reason}}">
+      <strong class="{{wrClass $p.WinProb}}">{{pct $p.WinProb}}</strong>
+      <span class="label">Est. win</span>
+    </div>{{end}}
+  </header>
+
+  {{if $p.Scored}}
+  <ul class="cs-vs">
+    {{range $p.Vs}}
+    <li>
+      <span class="icon" data-initials="{{initials .Name}}"><img src="{{champImg .Key $.Patch}}" alt="" width="32" height="32"></span>
+      <span>{{if .Games}}<strong class="{{wrClass .WinRate}}">{{pct1 .WinRate}}</strong> into {{.Name}}{{else}}No matchup data vs {{.Name}}{{end}}</span>
+      <span class="muted small">{{pct .Odds}} your laner{{if .Games}} · {{thousands .Games}} games{{end}}</span>
+    </li>
+    {{else}}<li class="muted">Your lane opponent isn't picked yet.</li>{{end}}
+  </ul>
+  {{end}}
+
+  <details class="cs-runes" data-key="{{$p.Key}}"{{if eq .I 0}} open{{end}}>
+    <summary>
+      <span class="label">Runes {{if eq $p.RunesState "ok"}}{{if $p.RunesVs.Key}}vs {{$p.RunesVs.Name}}{{else}}· usual page{{end}}{{end}}</span>
+      {{if eq $p.RunesState "ok"}}<span class="loadout"><span class="pair runes">{{with $p.Runes.Primary}}{{template "rune" (index . 0)}}{{end}}</span><span class="pair runes">{{template "rune" $p.Runes.SubStyle}}</span></span>{{else if eq $p.RunesState "loading"}}<span class="muted small"><span class="spin"></span>Loading</span>{{else}}<span class="muted small">None on OP.GG</span>{{end}}
+    </summary>
+    {{if eq $p.RunesState "ok"}}{{template "runePage" (opggRunes $p.Runes)}}
+    {{else if eq $p.RunesState "loading"}}<p class="muted"><span class="spin"></span>Loading from OP.GG…</p>
+    {{else}}<p class="muted">OP.GG has no rune page for it here.</p>{{end}}
+  </details>
+</article>
+{{end}}

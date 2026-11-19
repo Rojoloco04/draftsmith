@@ -20,7 +20,7 @@
       <a href="/matches?queue={{.Queue.Key}}" data-nav="matches" {{if eq .Nav "matches"}}aria-current="page"{{end}}><svg class="i"><use href="#i-matches"/></svg><span>Matches</span></a>
       <a href="/champions?queue={{.Queue.Key}}" data-nav="champions" {{if eq .Nav "champions"}}aria-current="page"{{end}}><svg class="i"><use href="#i-champions"/></svg><span>Champions</span></a>
       <a href="/tier-list?queue={{.Queue.Key}}" data-nav="tier-list" {{if eq .Nav "tier-list"}}aria-current="page"{{end}}><svg class="i"><use href="#i-tiers"/></svg><span>Tier list</span></a>
-      <a href="/champ-select" data-nav="champ-select" class="soon" {{if eq .Nav "champ-select"}}aria-current="page"{{end}}><svg class="i"><use href="#i-select"/></svg><span>Champ select</span></a>
+      <a href="/champ-select" data-nav="champ-select" {{if eq .Nav "champ-select"}}aria-current="page"{{end}}><svg class="i"><use href="#i-select"/></svg><span>Champ select</span></a>
     </nav>
     <div class="top-end">
       <span class="who">

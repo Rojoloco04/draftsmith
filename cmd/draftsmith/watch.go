@@ -36,44 +36,24 @@ func cmdWatch(ctx context.Context, args []string) error {
 	fs.Parse(args)
 
 	logger := log.New(os.Stdout, "", log.LstdFlags)
-	dirs := lcu.DefaultDirs()
-	if *dir != "" {
-		dirs = []string{*dir}
-	}
-	w := &watch.Watcher{
-		Discover: func(ctx context.Context) (lcu.Credentials, error) { return lcu.Discover(ctx, dirs) },
-		Connect:  func(c lcu.Credentials) watch.Client { return lcu.New(c) },
-		Log:      logger,
-		Poll:     *poll,
-	}
+	o := watchOpts{leagueDir: *dir, poll: *poll, minGames: *minGames, suggest: !*noSuggest}
 
 	// The index holds my games and the OP.GG cache. Without one, watch
 	// still follows the draft, with champion ids and no suggestions.
+	var w *watch.Watcher
 	path := filepath.Join(*data, db.FileName)
 	if _, err := os.Stat(path); err != nil {
 		logger.Printf("no index at %s (run `draftsmith sync` first); showing the draft without suggestions", path)
+		w, _ = newWatcher(ctx, nil, nil, o, logger)
 	} else {
 		d, err := db.Open(ctx, path)
 		if err != nil {
 			return err
 		}
 		defer d.Close()
-		svc := meta.New(d, *opggEndpoint)
-		names := championTable(ctx, svc, logger)
-		if names != nil {
-			w.Name = func(id int) string { return names.byID[id].Name }
-		}
-		if !*noSuggest {
-			if live, err := newLive(ctx, d, svc, names, *minGames, logger); err != nil {
-				logger.Printf("suggestions off: %v", err)
-			} else {
-				w.OnSession = live.Update
-				w.OnPhase = func(p string) {
-					if p != lcu.PhaseChampSelect {
-						live.Reset()
-					}
-				}
-			}
+		var note string
+		if w, note = newWatcher(ctx, d, meta.New(d, *opggEndpoint), o, logger); note != "" {
+			logger.Printf("suggestions off: %s", note)
 		}
 	}
 
@@ -86,6 +66,58 @@ func cmdWatch(ctx context.Context, args []string) error {
 		logger.Printf("capturing champ select to %s", *capture)
 	}
 	return w.Run(ctx)
+}
+
+// watchOpts are the settings `watch` and `serve --watch` share.
+type watchOpts struct {
+	leagueDir string // "" for the standard install locations
+	poll      time.Duration
+	minGames  int
+	suggest   bool
+	// onBoard, if set, gets every champ select as a draft.Board.
+	onBoard func(draft.Board)
+}
+
+// newWatcher sets up a watcher for the local client and, with an index
+// and OP.GG, suggestions from my pool. d and svc may be nil. note says why
+// there won't be suggestions ("" if there will). It may wait on OP.GG for
+// the champion table and tier list (each cached, at most 15s).
+func newWatcher(ctx context.Context, d *db.DB, svc *meta.Service, o watchOpts, logger *log.Logger) (*watch.Watcher, string) {
+	dirs := lcu.DefaultDirs()
+	if o.leagueDir != "" {
+		dirs = []string{o.leagueDir}
+	}
+	w := &watch.Watcher{
+		Discover: func(ctx context.Context) (lcu.Credentials, error) { return lcu.Discover(ctx, dirs) },
+		Connect:  func(c lcu.Credentials) watch.Client { return lcu.New(c) },
+		Log:      logger,
+		Poll:     o.poll,
+	}
+	switch {
+	case d == nil:
+		return w, "no index yet (run `draftsmith sync` first)"
+	case svc == nil:
+		return w, "OP.GG data is turned off (--no-meta), and suggestions need it"
+	}
+	names := championTable(ctx, svc, logger)
+	if names != nil {
+		w.Name = func(id int) string { return names.byID[id].Name }
+	}
+	if !o.suggest {
+		return w, "turned off with --no-suggest"
+	}
+	live, err := newLive(ctx, d, svc, names, o.minGames, logger)
+	if err != nil {
+		return w, err.Error()
+	}
+	live.OnBoard = o.onBoard
+	w.OnSession = live.Update
+	w.OnPhase = func(p string) {
+		if p != lcu.PhaseChampSelect {
+			live.Reset()
+		}
+	}
+	return w, ""
 }
 
 // champions indexes OP.GG's champion table by Riot id and key.

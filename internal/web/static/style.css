@@ -110,7 +110,6 @@ svg.i { width: 18px; height: 18px; flex: none; }
 .nav a { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--radius-sm); color: var(--muted); font-weight: 560; white-space: nowrap; transition: background .15s, color .15s; }
 .nav a:hover { color: var(--text); background: var(--surface-2); text-decoration: none; }
 .nav a[aria-current] { color: var(--accent); background: var(--accent-soft); }
-.nav a.soon::after { content: "soon"; font-size: .58rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 1px 5px; border-radius: 5px; background: var(--surface-3); color: var(--muted); }
 .top-end { margin-left: auto; display: flex; align-items: center; gap: 10px; flex: none; }
 .who { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 6px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); }
 .who .crest { width: 26px; height: 26px; }
@@ -424,4 +423,70 @@ td.items img, td.items .slot { margin-right: 3px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+
+/* Champ select: both teams either side of the suggestions. Narrow
+   windows (the overlay) stack the suggestions first. */
+.cs-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.cs-phase { display: flex; align-items: baseline; gap: 12px; }
+.cs-timer { font-size: 1.6rem; font-weight: 750; letter-spacing: -.02em; }
+.cs-timer.low { color: var(--neg); }
+.cs-lane { display: inline-flex; align-items: center; gap: 6px; font-weight: 650; padding: 5px 12px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); }
+.cs-status { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: .84rem; margin-bottom: 12px; }
+.cs-status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--s2); }
+.cs-status.up .dot { background: var(--pos); box-shadow: 0 0 0 3px color-mix(in srgb, var(--pos) 20%, transparent); }
+.cs.offline { opacity: .55; transition: opacity .3s; }
+.cs.offline::before { content: "Reconnecting to Draftsmith…"; display: block; margin-bottom: 10px; color: var(--neg); font-size: .82rem; }
+
+.cs-grid { display: grid; grid-template-columns: 220px minmax(0, 1fr) 220px; gap: 16px; align-items: start; }
+.cs-team { display: flex; flex-direction: column; gap: 8px; }
+.cs-bans { display: flex; flex-wrap: wrap; gap: 4px; min-height: 26px; align-items: center; margin-bottom: 4px; }
+.cs-team.enemy .cs-bans { justify-content: flex-end; }
+.icon.ban { width: 26px; height: 26px; border-radius: 7px; filter: grayscale(1); opacity: .65; }
+.icon.ban::after { content: ""; position: absolute; inset: 0; background: linear-gradient(135deg, transparent 46%, var(--neg) 46% 54%, transparent 54%); }
+.cs-slot { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); min-width: 0; }
+.cs-team.ally .cs-slot { border-left: 3px solid var(--win); }
+.cs-team.enemy .cs-slot { border-right: 3px solid var(--loss); flex-direction: row-reverse; text-align: right; }
+.cs-team.enemy .cs-slot .role-line { justify-content: flex-end; }
+.cs-slot.me { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.cs-slot.hover .icon { opacity: .6; outline: 2px dashed var(--line-strong); outline-offset: -2px; }
+.cs-slot.open .icon { opacity: .5; }
+.cs-slot-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.cs-slot-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-slot-text .role-line { flex-wrap: wrap; font-size: .78rem; }
+.tag { font-size: .6rem; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 6px; background: var(--accent); color: #fff; }
+.tag.soft { background: var(--surface-3); color: var(--muted); }
+.tag.warn { display: inline-block; margin-top: 4px; background: var(--gold); }
+
+.cs-picks { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cs-picks > .card { margin: 0; }
+.cs-pick.first { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.cs-pick-head { display: flex; align-items: center; gap: 14px; }
+.cs-rank { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: .75rem; font-weight: 750; background: var(--surface-3); color: var(--muted); }
+.cs-pick.first .cs-rank { background: var(--accent); color: #fff; }
+.cs-pick-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.cs-pick-name h2 { margin: 0; font-size: 1.25rem; }
+.cs-pick-name .muted { font-size: .82rem; }
+.cs-score { display: flex; flex-direction: column; align-items: flex-end; flex: none; cursor: help; }
+.cs-score strong { font-size: 1.9rem; font-weight: 760; letter-spacing: -.03em; line-height: 1.1; }
+.cs-vs { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 6px; }
+.cs-vs li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cs-vs .small { margin-left: auto; }
+.cs-runes { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+.cs-runes summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; list-style: none; }
+.cs-runes summary::-webkit-details-marker { display: none; }
+.cs-runes summary .loadout { flex-direction: row; }
+.cs-runes[open] summary { margin-bottom: 10px; }
+.cs-runes[open] summary .loadout { display: none; }
+
+@media (max-width: 980px) {
+  .cs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cs-picks { grid-column: 1 / -1; order: -1; }
+}
+@media (max-width: 560px) {
+  .cs-slot { padding: 6px 8px; gap: 8px; }
+  .cs-slot .icon.lg { width: 36px; height: 36px; }
+  .cs-pick-head { gap: 10px; flex-wrap: wrap; }
+  .cs-pick-head .icon.xl { width: 52px; height: 52px; }
+  .cs-score strong { font-size: 1.5rem; }
 }

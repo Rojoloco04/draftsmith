@@ -39,6 +39,7 @@ draftsmith serve                           # http://127.0.0.1:8080, syncs every 
 draftsmith serve --addr 100.x.y.z:8080     # bind your Tailscale IP to open it from your phone
 draftsmith serve --no-sync                 # just browse the archive
 draftsmith serve --no-meta                 # don't call OP.GG
+draftsmith serve --watch                   # on the PC you play on: live champ select page
 draftsmith reindex                         # rebuild data/draftsmith.db from the archive
 ```
 
@@ -47,6 +48,12 @@ Pages: an overview (rank and LP history, rolling win rate, top champions, roles,
 Background sync checks for new games every 25 minutes. To pick up a game you just finished, press **Refresh** in the header: it syncs right away and reloads the page when it's done.
 
 OP.GG data (Emerald+, current patch) shows up in three places: the tier list page, with your own record next to each champion; a "your pool vs the meta" card and a meta tier column on the champions page; and an OP.GG card on each champion page with its tier, rates, and best and worst matchups, next to your record against those champions. Responses are cached in `data/draftsmith.db` and refreshed daily. If OP.GG is unreachable, the last copy is shown with its age.
+
+### Champ select
+
+`draftsmith watch` follows the League client on the same PC (it reads the client's local API, which only listens on localhost) and, in champ select, logs the draft and suggestions from your pool. `serve --watch` does the same inside the dashboard: the **Champ select** page updates live over server-sent events with both teams, bans, each enemy's likely lane, your top three picks (estimated win rate from your record, OP.GG's win rate and the likely lane matchup) and OP.GG's rune page for each, or just your champion's once you lock in.
+
+It only reads. It never hovers, picks, bans or imports runes, it shows champions and lanes but never anyone's name, and it goes idle once the game loads.
 
 The dashboard has no login, so it only listens where you tell it to and refuses `0.0.0.0`. Keep it on localhost or Tailscale; don't port forward it. Other players appear as champion and position only. Champion, item, rune and summoner spell icons and splash art load from Riot's Data Dragon CDN, and ranked emblems from CommunityDragon (`raw.communitydragon.org`); those URLs carry only ids and tier names. Rune and spell names are embedded from Data Dragon (`internal/web/ddragon`).
 
@@ -98,7 +105,7 @@ internal/fixture    synthetic match/timeline JSON (and one scrubbed real game) f
 ## Roadmap
 
 - `sample`: crawl games from players in your tier to build real benchmarks (CS diff, vision, early deaths) for your role and elo, so the report can say "below your bracket" instead of only "below your own average"
-- Champ select helper (`watch`) feeding the dashboard live
+- A champ select overlay: the champ select page in a small always-on-top window next to the client
 - Death position heatmap across games
 - LLM writeup over `export` output
 - Quartermaster integration: post-game report in Discord

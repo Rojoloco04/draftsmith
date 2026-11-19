@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rojoloco04/draftsmith/internal/analysis"
 	"github.com/rojoloco04/draftsmith/internal/lcu"
@@ -42,6 +43,11 @@ type Live struct {
 	Key  func(id int) string
 	Name func(key string) string
 	Log  *log.Logger
+	// OnBoard, if set, is called with the champ select whenever anything
+	// on it changes, including a rune page arriving. It's called from the
+	// goroutine that called Update or from the background fetcher, one
+	// call at a time, and must not call back into Live.
+	OnBoard func(Board)
 
 	rmu     sync.Mutex // serializes refresh, so "changed" compares in order
 	mu      sync.Mutex
@@ -49,12 +55,14 @@ type Live struct {
 	tl      meta.TierList
 	tlErr   error
 	sess    lcu.Session
+	sessAt  time.Time // when sess was read, for the timer
 	have    bool
 	tables  map[string][]meta.Counter // key/position
 	runes   map[string]runeResult     // key/opponent/position
 	pending map[string]bool
 	queue   chan func()
 	last    view
+	lastB   string // last board's fingerprint
 }
 
 // view is what Live shows for one champ select state: a header, and
@@ -140,13 +148,13 @@ func (l *Live) Warm(position string) {
 func (l *Live) Reset() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.have, l.last = false, view{}
+	l.have, l.last, l.lastB = false, view{}, ""
 }
 
 // Update handles a champ select update.
 func (l *Live) Update(s lcu.Session) {
 	l.mu.Lock()
-	l.sess, l.have = s, true
+	l.sess, l.sessAt, l.have = s, time.Now(), true
 	l.mu.Unlock()
 	l.refresh()
 }
@@ -156,16 +164,20 @@ func (l *Live) refresh() {
 	l.rmu.Lock()
 	defer l.rmu.Unlock()
 	l.mu.Lock()
-	s, have := l.sess, l.have
+	s, at, have := l.sess, l.sessAt, l.have
 	l.mu.Unlock()
 	if !have || l.ctx == nil {
 		return
 	}
-	v := l.render(s)
+	v, b := l.render(s, at)
+	fp := b.fingerprint()
 	l.mu.Lock()
-	prev := l.last
-	l.last = v
+	prev, prevB := l.last, l.lastB
+	l.last, l.lastB = v, fp
 	l.mu.Unlock()
+	if l.OnBoard != nil && fp != prevB {
+		l.OnBoard(b)
+	}
 	switch {
 	case v.head == "":
 	case v.ranking() != prev.ranking():
@@ -179,32 +191,37 @@ func (l *Live) refresh() {
 	}
 }
 
-// render works out the suggestions for s, queuing fetches for anything
-// missing.
-func (l *Live) render(s lcu.Session) view {
+// render works out the suggestions for s, read at time at, queuing
+// fetches for anything missing. It returns them for the log and, with the
+// rest of the draft, for the dashboard.
+func (l *Live) render(s lcu.Session, at time.Time) (view, Board) {
+	l.mu.Lock()
+	tl, err := l.tl, l.tlErr
+	l.mu.Unlock()
+	var enemies []string
+	for _, m := range s.TheirTeam {
+		enemies = append(enemies, l.key(m.ChampionID)) // a hover shows in the client too
+	}
+	odds := Roles(tl, enemies, nil) // without a tier list, every lane is as likely
+	b := l.board(s, at, odds)
+
 	me, ok := s.Me()
 	if !ok {
-		return view{}
+		return view{}, b
 	}
 	position := clientPosition(me.AssignedPosition)
 	if position == "" {
 		position = l.mainPosition()
 	}
+	b.Position = position
 	if position == "" {
-		return view{head: "suggestions: no lane assigned and no games to guess one from"}
+		b.Note = "No lane assigned, and no games to guess one from."
+		return view{head: "suggestions: no lane assigned and no games to guess one from"}, b
 	}
-	l.mu.Lock()
-	tl, err := l.tl, l.tlErr
-	l.mu.Unlock()
 	if err != nil {
-		return view{head: "suggestions: no OP.GG tier list: " + err.Error()}
+		b.Note = "No OP.GG tier list: " + err.Error()
+		return view{head: "suggestions: no OP.GG tier list: " + err.Error()}, b
 	}
-
-	var enemies []string
-	for _, m := range s.TheirTeam {
-		enemies = append(enemies, l.key(m.ChampionID)) // a hover shows in the client too
-	}
-	odds := Roles(tl, enemies, nil)
 
 	var taken, hovered []string
 	mine, theirs := s.BanList()
@@ -240,10 +257,12 @@ func (l *Live) render(s lcu.Session) view {
 		} else {
 			opp = likelyLaner(odds, position)
 		}
+		b.Locked = true
+		b.Picks = []Pick{l.pick(champ, forMe, position, opp)}
 		return view{
 			head:  fmt.Sprintf("locked in %s (%s)", l.name(champ), meta.PositionName(position)),
 			items: []viewItem{{name: l.name(champ), runes: l.runeLine(champ, opp, position)}},
-		}
+		}, b
 	}
 
 	var pool []string
@@ -258,7 +277,8 @@ func (l *Live) render(s lcu.Session) view {
 		Matchups: l.tablesFor(pool, position), Taken: taken, Hovered: hovered,
 	})
 	if len(sug) == 0 {
-		return view{head: fmt.Sprintf("suggestions (%s): none; no champion with %d+ games there is still available", meta.PositionName(position), max(l.MinGames, 1))}
+		b.Note = fmt.Sprintf("None of your champions with %d+ games %s is still available.", max(l.MinGames, 1), meta.PositionName(position))
+		return view{head: fmt.Sprintf("suggestions (%s): none; no champion with %d+ games there is still available", meta.PositionName(position), max(l.MinGames, 1))}, b
 	}
 	v := view{head: fmt.Sprintf("suggestions (%s):", meta.PositionName(position))}
 	for i, sg := range sug {
@@ -267,19 +287,16 @@ func (l *Live) render(s lcu.Session) view {
 		}
 		opp, _ := sg.LikelyOpponent(LikelyOdds)
 		v.items = append(v.items, viewItem{name: l.name(sg.Champion), reason: sg.Reason(position, l.Name), runes: l.runeLine(sg.Champion, opp, position)})
+		b.Picks = append(b.Picks, l.pick(sg.Champion, &sug[i], position, opp))
 	}
-	return v
+	return v, b
 }
 
 // runeLine describes the rune page for champ into opp ("" if unknown),
 // queuing the fetch if it isn't here yet.
 func (l *Live) runeLine(champ, opp, position string) string {
-	k := champ + "/" + opp + "/" + position
-	l.mu.Lock()
-	r, ok := l.runes[k]
-	l.mu.Unlock()
+	r, ok := l.runeFor(champ, opp, position)
 	if !ok {
-		l.fetchRunes(champ, opp, position)
 		return loadingRunes
 	}
 	if !r.ok {
@@ -289,6 +306,18 @@ func (l *Live) runeLine(champ, opp, position string) string {
 		return "vs " + l.name(r.vs) + ": " + r.page.String()
 	}
 	return "(usual page): " + r.page.String()
+}
+
+// runeFor returns the rune page for champ into opp, and whether it's
+// been fetched; if not, it queues the fetch.
+func (l *Live) runeFor(champ, opp, position string) (runeResult, bool) {
+	l.mu.Lock()
+	r, ok := l.runes[champ+"/"+opp+"/"+position]
+	l.mu.Unlock()
+	if !ok {
+		l.fetchRunes(champ, opp, position)
+	}
+	return r, ok
 }
 
 func (l *Live) tablesFor(champs []string, position string) map[string][]meta.Counter {
