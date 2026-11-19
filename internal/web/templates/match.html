@@ -61,7 +61,7 @@
 
 {{range .Teams}}
 <section class="card team {{.Side}}">
-  <h2><span class="side-dot"></span>{{if .Mine}}My team{{else}}Enemy team{{end}} <span class="muted">· {{.Name}} · {{if .Win}}<span class="pos">Victory</span>{{else}}<span class="neg">Defeat</span>{{end}} · {{.Kills}} kills · {{thousands .Gold}} gold</span></h2>
+  <h2><span class="side-dot"></span>{{if .Mine}}My team{{else}}Enemy team{{end}} <span class="muted">{{.Name}} · {{if $.Game.Remake}}Remake{{else if .Win}}<span class="pos">Victory</span>{{else}}<span class="neg">Defeat</span>{{end}} · {{.Kills}} kills · {{thousands .Gold}} gold</span></h2>
   <div class="scroll">
   <table class="tbl players">
     <thead><tr><th>Champion</th><th class="r">KDA</th><th class="r">CS</th><th class="r">Gold</th><th>Damage</th><th class="r">Vision</th><th>Items</th></tr></thead>

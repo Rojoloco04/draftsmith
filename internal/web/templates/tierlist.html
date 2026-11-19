@@ -20,8 +20,8 @@
       <th>Champion</th>
       <th>Tier</th>
       <th class="r"><a href="/tier-list?queue={{$q}}&amp;position={{$p}}&amp;sort=wr" {{if eq $s "wr"}}aria-current="true"{{end}}>Win rate</a></th>
-      <th class="r"><a href="/tier-list?queue={{$q}}&amp;position={{$p}}&amp;sort=games" {{if eq $s "games"}}aria-current="true"{{end}}>Games</a></th>
-      <th class="r">Pick</th>
+      <th class="r hide-sm"><a href="/tier-list?queue={{$q}}&amp;position={{$p}}&amp;sort=games" {{if eq $s "games"}}aria-current="true"{{end}}>Games</a></th>
+      <th class="r hide-sm">Pick</th>
       <th class="r"><a href="/tier-list?queue={{$q}}&amp;position={{$p}}&amp;sort=ban" {{if eq $s "ban"}}aria-current="true"{{end}}>Ban</a></th>
       <th class="r"><a href="/tier-list?queue={{$q}}&amp;position={{$p}}&amp;sort=mine" {{if eq $s "mine"}}aria-current="true"{{end}}>You</a></th>
     </tr></thead>
@@ -36,8 +36,8 @@
         </td>
         <td>{{template "tierBadge" .Tier}}</td>
         <td class="r">{{pct1 .WinRate}}</td>
-        <td class="r muted">{{thousands .Play}}</td>
-        <td class="r">{{pct .PickRate}}</td>
+        <td class="r muted hide-sm">{{thousands .Play}}</td>
+        <td class="r hide-sm">{{pct .PickRate}}</td>
         <td class="r">{{pct .BanRate}}</td>
         <td class="r nowrap">{{if .Mine.Games}}<strong class="{{if ge .Mine.Games 5}}{{wrClass .MineAdj}}{{end}}" title="Adjusted win rate">{{pct .MineAdj}}</strong> <span class="muted">{{.Mine.Wins}}-{{.Mine.Losses}}</span>{{else}}<span class="muted">-</span>{{end}}</td>
       </tr>

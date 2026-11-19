@@ -383,7 +383,7 @@ func (s *Server) match(w http.ResponseWriter, r *http.Request) {
 		d.Teams = []team{red, blue}
 	}
 
-	if len(det.Lane) > 1 {
+	if len(det.Lane) > 1 && !g.Remake { // a remake's minute or two says nothing
 		var me, opp, meCS, oppCS Series
 		me = Series{Name: "My gold", Class: "s1"}
 		opp = Series{Name: "Opponent gold", Class: "s3"}
@@ -407,7 +407,7 @@ func (s *Server) match(w http.ResponseWriter, r *http.Request) {
 		}
 		mins := func(v float64) string { return fmt.Sprintf("%.0fm", v) }
 		d.GoldChart = LineChart{Title: "Gold over time", Series: []Series{opp, me}, XTicks: xt, XFormat: mins,
-			YFormat: func(v float64) string { return fmt.Sprintf("%gk", v/1000) }}.SVG()
+			YFormat: goldTick}.SVG()
 		d.CSChart = LineChart{Title: "CS over time", Series: []Series{oppCS, meCS}, XTicks: xt, XFormat: mins}.SVG()
 	}
 	if g.HasTimeline {
@@ -503,7 +503,19 @@ func (s *Server) champion(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(games) == 0 {
-		s.fail(w, r, http.StatusNotFound, fmt.Errorf("no %s games in %s", champName(name), queueFrom(r).Label))
+		// Played in another queue or on another account: keep the page,
+		// with its queue switch, rather than a dead end.
+		other, err := s.db.Games(r.Context(), db.GameFilter{Champion: name})
+		if err != nil {
+			s.fail(w, r, http.StatusInternalServerError, err)
+			return
+		}
+		if len(other) == 0 {
+			s.fail(w, r, http.StatusNotFound, fmt.Errorf("no %s games in the archive", champName(name)))
+			return
+		}
+		s.render(w, r, "champion", "", championData{Base: s.base(r, champName(name), "champions"), Name: name,
+			Overall: sum.Base, Stats: analysis.Group{Key: name}, Patch: other[len(other)-1].Patch})
 		return
 	}
 	d := championData{Base: s.base(r, champName(name), "champions"), Name: name, Overall: sum.Base, Patch: games[len(games)-1].Patch}
@@ -527,4 +539,12 @@ func (s *Server) champion(w http.ResponseWriter, r *http.Request) {
 	d.WRChart = winRateChart(games)
 	d.Meta = s.championMeta(r, name, d.Patch, games)
 	s.render(w, r, "champion", "", d)
+}
+
+// goldTick labels a gold axis: 0, 500, 5k, 12.5k.
+func goldTick(v float64) string {
+	if math.Abs(v) < 1000 {
+		return fmt.Sprintf("%g", v)
+	}
+	return fmt.Sprintf("%gk", v/1000)
 }

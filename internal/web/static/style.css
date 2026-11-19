@@ -139,8 +139,13 @@ svg.i { width: 18px; height: 18px; flex: none; }
 @media (max-width: 560px) {
   .who-text { display: none; }
   .who { padding: 4px; }
+  .acct-menu summary.who { padding: 4px 6px; }
   .btn span { display: none; }
+  .nav { justify-content: space-between; }
+  .nav a { padding: 8px 10px; }
+  .nav a:not([aria-current]) span { display: none; }
 }
+.who-glyph { width: 20px; height: 20px; color: var(--muted); }
 
 .pagehead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .pagehead h1 { margin: 0; }
@@ -267,6 +272,7 @@ svg.ri { width: 16px; height: 16px; flex: none; color: var(--gold); vertical-ali
 .tbl tbody tr { transition: background .12s; }
 .tbl tbody tr:hover td { background: var(--surface-2); }
 .tbl tr.me td { background: var(--accent-soft); }
+@media (max-width: 560px) { .tbl .hide-sm { display: none; } }
 .tbl tr.me td:first-child { box-shadow: inset 3px 0 var(--accent); }
 .players td { font-size: .85rem; }
 .players .icon { width: 36px; height: 36px; }
@@ -302,6 +308,7 @@ td.items img, td.items .slot { margin-right: 3px; }
 .chart .gridline { stroke: var(--line); stroke-width: 1; }
 .chart .ref { stroke: var(--muted); stroke-dasharray: 4 4; stroke-width: 1; }
 .chart .tick { fill: var(--muted); font-size: 11px; }
+@media (max-width: 560px) { .chart .tick { font-size: 18px; } }
 .chart polyline { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .chart .hit { fill: transparent; }
 .chart .series.s1 polyline { stroke: var(--s1); }
@@ -414,7 +421,8 @@ td.items img, td.items .slot { margin-right: 3px; }
 .team.red .side-dot { background: var(--loss); }
 .back { display: inline-flex; margin: 4px 0 8px; }
 
-.foot { color: var(--muted); font-size: .78rem; padding-top: 18px; padding-bottom: 32px; margin-top: 28px; border-top: 1px solid var(--line); }
+.foot { color: var(--muted); font-size: .78rem; padding-top: 18px; padding-bottom: 32px; margin-top: 28px;
+  background: linear-gradient(var(--line), var(--line)) center top / calc(100% - 32px) 1px no-repeat; }
 
 .htmx-request #results, #results.htmx-request { opacity: .55; transition: opacity .2s; }
 
@@ -470,9 +478,9 @@ td.items img, td.items .slot { margin-right: 3px; }
 .cs-slot-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
 .cs-slot-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-slot-text .role-line { flex-wrap: wrap; font-size: .78rem; }
-.tag { font-size: .6rem; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 6px; background: var(--accent); color: #fff; }
-.tag.soft { background: var(--surface-3); color: var(--muted); }
-.tag.warn { display: inline-block; margin-top: 4px; background: var(--gold); }
+.cs .tag { font-size: .6rem; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; }
+.cs .tag.soft { background: var(--surface-3); color: var(--muted); }
+.cs .tag.warn { display: inline-block; align-self: flex-start; margin-top: 4px; background: var(--gold); }
 
 .cs-picks { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .cs-picks > .card { margin: 0; }
@@ -511,7 +519,8 @@ td.items img, td.items .slot { margin-right: 3px; }
 .cs-runes summary::-webkit-details-marker { display: none; }
 .cs-runes summary .loadout { flex-direction: row; }
 .cs-runes[open] summary { margin-bottom: 10px; }
-.cs-runes[open] summary .loadout { display: none; }
+.cs-runes[open] summary .loadout, .cs-runes[open] summary .small { display: none; }
+.cs-pick-head + p { margin: 12px 0 0; }
 
 @media (max-width: 980px) {
   .cs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -539,7 +548,8 @@ body.overlay { min-height: 0; font-size: 13px; overflow-x: hidden; background: v
 .overlay .cs-team.enemy .cs-slot { flex-direction: column; gap: 4px; padding: 6px 2px; text-align: center; border-right: 1px solid var(--line); border-top: 3px solid var(--loss); box-shadow: none; }
 .overlay .cs-slot .icon.lg { width: 40px; height: 40px; }
 .overlay .cs-slot-text { align-items: center; width: 100%; }
-.overlay .cs-slot-text strong { max-width: 100%; font-size: .72rem; font-weight: 650; }
+.overlay .cs-slot-text strong { max-width: 100%; font-size: .72rem; font-weight: 650; line-height: 1.2;
+  white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .overlay .cs-team.enemy .cs-slot .role-line { justify-content: center; gap: 2px; font-size: .7rem; }
 .overlay .cs-slot .pos-name, .overlay .cs-slot .tag { display: none; }
 .overlay .cs-picks { gap: 8px; }

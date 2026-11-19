@@ -117,6 +117,7 @@
 
 {{define "counterTable"}}
 {{if .}}
+<div class="scroll">
 <table class="tbl">
   <thead><tr><th>Opponent</th><th class="r">Win rate</th><th class="r">Games</th><th class="r">You</th></tr></thead>
   <tbody>
@@ -130,5 +131,6 @@
   {{end}}
   </tbody>
 </table>
+</div>
 {{else}}<p class="muted">Not enough games for OP.GG to list any.</p>{{end}}
 {{end}}

@@ -110,14 +110,16 @@ func (c LineChart) SVG() template.HTML {
 		xf = func(v float64) string { return fmt.Sprintf("%.0f", v) }
 	}
 
-	// Size the left margin to the widest y label (11px text, ~6.5px/char).
+	// Size the left margin to the widest y label. Ticks are 11px, but 18px
+	// on phones (style.css), where the chart is scaled down; ~10px/char
+	// leaves room for both.
 	labels := make([]string, yt+1)
 	widest := 0
 	for i := range labels {
 		labels[i] = yf(ymin + (ymax-ymin)*float64(i)/float64(yt))
 		widest = max(widest, len([]rune(labels[i])))
 	}
-	padL := math.Max(28, 6.5*float64(widest)+12)
+	padL := math.Max(28, 10*float64(widest)+12)
 	plotW := chartW - padL - padR
 	sx := func(x float64) float64 { return padL + (x-xmin)/(xmax-xmin)*plotW }
 	sy := func(y float64) float64 { return padT + (1-(y-ymin)/(ymax-ymin))*plotH }
@@ -130,7 +132,7 @@ func (c LineChart) SVG() template.HTML {
 	for i, label := range labels {
 		y := sy(ymin + (ymax-ymin)*float64(i)/float64(yt))
 		fmt.Fprintf(&b, `<line class="gridline" x1="%.1f" x2="%.1f" y1="%.1f" y2="%.1f"/>`, padL, padL+plotW, y, y)
-		fmt.Fprintf(&b, `<text class="tick" x="%.1f" y="%.1f" text-anchor="end">%s</text>`, padL-6, y+4, html.EscapeString(label))
+		fmt.Fprintf(&b, `<text class="tick" x="%.1f" y="%.1f" dy=".35em" text-anchor="end">%s</text>`, padL-6, y, html.EscapeString(label))
 	}
 	for _, r := range c.RefY {
 		y := sy(r)
@@ -194,7 +196,7 @@ func DeathMap(points []Point, title string) template.HTML {
 	fmt.Fprintf(&b, `<svg class="deathmap" viewBox="0 0 %.0f %.0f" role="img" aria-label="%s">`, size, size, html.EscapeString(title))
 	fmt.Fprintf(&b, `<rect class="rift" x="0" y="0" width="%.0f" height="%.0f" rx="6"/>`, size, size)
 	// River (the x+y = edge diagonal) and the three lanes.
-	fmt.Fprintf(&b, `<line class="river" x1="0" y1="0" x2="%.0f" y2="%.0f"/>`, size, size)
+	fmt.Fprintf(&b, `<line class="river" x1="6" y1="6" x2="%.0f" y2="%.0f"/>`, size-6, size-6)
 	fmt.Fprintf(&b, `<polyline class="lane" points="18,%.0f 18,18 %.0f,18"/>`, size-18, size-18)
 	fmt.Fprintf(&b, `<polyline class="lane" points="18,%.0f %.0f,%.0f %.0f,18"/>`, size-18, size-18, size-18, size-18)
 	fmt.Fprintf(&b, `<line class="lane" x1="18" y1="%.0f" x2="%.0f" y2="18"/>`, size-18, size-18)

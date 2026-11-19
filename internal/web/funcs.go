@@ -1,9 +1,12 @@
 package web
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"math"
 	"net/url"
 	"strings"
@@ -51,6 +54,7 @@ var funcs = template.FuncMap{
 	"dict":       dict,
 	"list":       func(xs ...any) []any { return xs },
 	"opggRunes":  opggRunes,
+	"asset":      asset,
 	"recordPct": func(wins, losses int) float64 {
 		if wins+losses == 0 {
 			return math.NaN()
@@ -277,3 +281,22 @@ func ladderLabel(v float64) string {
 	t := tierOrder[i]
 	return t[:1] + strings.ToLower(t[1:]) + " " + names[div]
 }
+
+// assetVersion changes whenever an embedded static file does. Static
+// files are cached for an hour, so their URLs carry it: a new build
+// doesn't run new pages against an old stylesheet or script.
+var assetVersion = func() string {
+	h := sha256.New()
+	fs.WalkDir(staticFS, "static", func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			b, _ := staticFS.ReadFile(p)
+			h.Write([]byte(p))
+			h.Write(b)
+		}
+		return nil
+	})
+	return hex.EncodeToString(h.Sum(nil))[:10]
+}()
+
+// asset is a static file's versioned URL.
+func asset(name string) string { return "/static/" + name + "?v=" + assetVersion }

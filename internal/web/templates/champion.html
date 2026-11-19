@@ -7,11 +7,11 @@
       <h1>{{champ .Name}}</h1>
       <p class="role-tags">{{range .Roles}}<span class="tag">{{template "role" .Key}}{{.Key}} <span class="muted">{{.Games}}</span></span>{{end}}</p>
     </div>
-    <div class="mhead-kda">
+    {{if .Stats.Games}}<div class="mhead-kda">
       <span class="label">Adjusted win rate</span>
       <strong class="{{if ge .Stats.Games 5}}{{wrClass .Stats.Adjusted}}{{end}}">{{pct .Stats.Adjusted}}</strong>
       <span class="muted">{{.Stats.Wins}}W {{.Stats.Losses}}L</span>
-    </div>
+    </div>{{end}}
   </div>
 </section>
 
@@ -20,6 +20,12 @@
   {{template "queueSwitch" .Base}}
 </div>
 
+{{if not .Stats.Games}}
+<section class="card empty">
+  <h2>No {{champ .Name}} games in {{.Queue.Label}}</h2>
+  <p class="muted">{{if .Account}}{{.RiotID}} hasn't played it here. Try another queue or account.{{else}}Try another queue.{{end}}</p>
+</section>
+{{else}}
 {{template "tiles" .Stats.Stats}}
 
 <div class="grid two">
@@ -28,10 +34,10 @@
     <p>Adjusted win rate <strong class="{{if ge .Stats.Games 5}}{{wrClass .Stats.Adjusted}}{{end}}">{{pct .Stats.Adjusted}}</strong>
       <span class="muted">(raw {{pct .Stats.WinRate}} over {{.Stats.Games}} game{{if ne .Stats.Games 1}}s{{end}}; your overall {{pct .Overall}})</span></p>
     {{if gt (len .Roles) 1}}
-    <table class="tbl">
+    <div class="scroll"><table class="tbl">
       <thead><tr><th>Role</th><th class="r">Games</th><th class="r">Win rate</th></tr></thead>
       <tbody>{{range .Roles}}<tr><td><span class="role-line">{{template "role" .Key}}{{.Key}}</span></td><td class="r">{{.Games}}</td><td class="r {{wrClass .WinRate}}">{{pct .WinRate}}</td></tr>{{end}}</tbody>
-    </table>
+    </table></div>
     {{end}}
     {{if .WRChart}}<div class="legend"><span class="key s1"></span>Last 20 <span class="key s2"></span>Last 10</div>{{.WRChart}}{{end}}
   </section>
@@ -39,6 +45,7 @@
   <section class="card">
     <h2>Matchups</h2>
     {{if .Matchups}}
+    <div class="scroll">
     <table class="tbl">
       <thead><tr><th>Lane opponent</th><th class="r">Games</th><th class="r">Win rate</th><th class="r">CS @10</th><th class="r">Gold @15</th></tr></thead>
       <tbody>
@@ -53,6 +60,7 @@
       {{end}}
       </tbody>
     </table>
+    </div>
     <p class="note">Most faced first. With one or two games a matchup says very little.</p>
     {{else}}
     <p class="muted">No lane opponents recorded.</p>
@@ -98,4 +106,5 @@
   <h2 class="section-title">Games</h2>
   <div class="mlist">{{range .Games}}{{template "matchRow" .}}{{end}}</div>
 </section>
+{{end}}
 {{end}}

@@ -81,6 +81,7 @@
 <div class="grid two">
   <section class="card">
     <div class="card-head"><h2>Top champions</h2><a class="more" href="/champions?queue={{.Queue.Key}}">All champions<svg class="i"><use href="#i-arrow"/></svg></a></div>
+    <div class="scroll">
     <table class="tbl">
       <thead><tr><th>Champion</th><th class="r">Games</th><th class="r" title="Win rate blended with 10 games at your overall win rate">Adj. WR</th><th class="r">KDA</th><th class="r">CS/m</th></tr></thead>
       <tbody>
@@ -95,6 +96,7 @@
       {{end}}
       </tbody>
     </table>
+    </div>
     <p class="note">Overall win rate {{pct .Sum.Base}}. Small samples are pulled toward it.</p>
   </section>
 

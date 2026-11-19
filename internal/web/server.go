@@ -290,7 +290,7 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, code int, err erro
 		Base
 		Code    int
 		Message string
-	}{b, code, err.Error()}
+	}{b, code, sentence(err.Error())}
 	if code >= 500 {
 		data.Message = "Something went wrong reading the index. The server log has details."
 	}
@@ -386,4 +386,17 @@ func logRequests(l *log.Logger, h http.Handler) http.Handler {
 			l.Printf("%s %s %d %s", r.Method, r.URL.RequestURI(), rec.code, time.Since(start).Round(time.Millisecond))
 		}
 	})
+}
+
+// sentence capitalizes an error message and ends it with a period for the
+// error page ("no indexed match" -> "No indexed match.").
+func sentence(msg string) string {
+	if msg == "" {
+		return msg
+	}
+	msg = strings.ToUpper(msg[:1]) + msg[1:]
+	if !strings.HasSuffix(msg, ".") {
+		msg += "."
+	}
+	return msg
 }
