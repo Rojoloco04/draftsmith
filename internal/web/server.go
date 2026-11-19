@@ -73,6 +73,12 @@ func New(d *db.DB, riotID string, logger *log.Logger) (*Server, error) {
 		}
 		s.pages[p] = t
 	}
+	// The overlay is the champ select board without the dashboard around it.
+	t, err := template.New("overlay").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/parts.html", "templates/champselect.html", "templates/overlay.html")
+	if err != nil {
+		return nil, fmt.Errorf("template overlay: %w", err)
+	}
+	s.pages["overlay"] = t
 	return s, nil
 }
 
@@ -119,6 +125,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /sync", s.syncNow)
 	mux.HandleFunc("GET /champ-select", s.champSelectPage)
 	mux.HandleFunc("GET /champ-select/events", s.champSelectEvents)
+	mux.HandleFunc("GET /overlay", s.overlayPage)
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusNotFound, errors.New("page not found"))
 	})

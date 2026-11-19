@@ -14,8 +14,10 @@ import (
 	"time"
 
 	"github.com/rojoloco04/draftsmith/internal/db"
+	"github.com/rojoloco04/draftsmith/internal/lcu"
 	"github.com/rojoloco04/draftsmith/internal/meta"
 	"github.com/rojoloco04/draftsmith/internal/opgg"
+	"github.com/rojoloco04/draftsmith/internal/overlay"
 	"github.com/rojoloco04/draftsmith/internal/store"
 	"github.com/rojoloco04/draftsmith/internal/web"
 )
@@ -34,7 +36,11 @@ func cmdServe(ctx context.Context, args []string) error {
 	watchClient := fs.Bool("watch", false, "follow the League client on this PC and show champ select live on the dashboard")
 	leagueDir := fs.String("league-dir", env("DRAFTSMITH_LEAGUE_DIR", ""), "with --watch: League install directory (default: the standard install location)")
 	minGames := fs.Int("min-games", 2, "with --watch: suggest only champions with at least this many games in your lane")
+	showOverlay := fs.Bool("overlay", false, "with --watch (implied): show champ select in a window docked beside the League client (Windows)")
 	fs.Parse(args)
+	if *showOverlay {
+		*watchClient = true
+	}
 
 	if err := checkListenAddr(*addr); err != nil {
 		return err
@@ -123,6 +129,13 @@ func cmdServe(ctx context.Context, args []string) error {
 	}
 	if *watchClient {
 		srv.WatchStarted("")
+		var ov *overlay.Overlay
+		if *showOverlay {
+			ov, err = overlay.Start(ctx, overlay.Options{URL: "http://" + ln.Addr().String() + "/overlay", Log: logger})
+			if err != nil {
+				logger.Printf("overlay off: %v", err)
+			}
+		}
 		go func() {
 			o := watchOpts{leagueDir: *leagueDir, minGames: *minGames, suggest: true, onBoard: srv.WatchBoard}
 			w, note := newWatcher(ctx, d, m, o, logger)
@@ -136,6 +149,9 @@ func cmdServe(ctx context.Context, args []string) error {
 					onPhase(p)
 				}
 				srv.WatchPhase(p)
+				if ov != nil {
+					ov.SetActive(p == lcu.PhaseChampSelect)
+				}
 			}
 			if err := w.Run(ctx); err != nil {
 				logger.Printf("watch: %v", err)

@@ -483,6 +483,44 @@ td.items img, td.items .slot { margin-right: 3px; }
   .cs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cs-picks { grid-column: 1 / -1; order: -1; }
 }
+/* The overlay (/overlay): one narrow column beside the League client.
+   The client already shows my team, so the overlay leaves it out and
+   puts the enemy team, with each slot's likely lane, in a strip on top. */
+body.overlay { min-height: 0; font-size: 13px; overflow-x: hidden; background: var(--bg); }
+.ov-bar { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: .75rem; font-weight: 650; letter-spacing: .02em; }
+.ov-hide { margin-left: auto; width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.ov-hide:hover { background: var(--surface-3); color: var(--text); }
+.ov-hide[hidden] { display: none; }
+.overlay .cs { padding: 10px 12px 14px; }
+.overlay .card { padding: 12px 14px; }
+.overlay .card.empty { padding: 24px 12px; }
+.overlay .card.empty h1 { font-size: 1.15rem; }
+.overlay .cs-head { margin-bottom: 10px; }
+.overlay .cs-timer { font-size: 1.3rem; }
+.overlay .cs-lane { padding: 3px 10px; font-size: .8rem; }
+.overlay .cs-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.overlay .cs-team.ally { display: none; }
+.overlay .cs-team.enemy { order: -2; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.overlay .cs-team.enemy .cs-bans { grid-column: 1 / -1; justify-content: flex-start; min-height: 0; }
+.overlay .cs-team.enemy .cs-slot { flex-direction: column; gap: 4px; padding: 6px 2px; text-align: center; border-right: 1px solid var(--line); border-top: 3px solid var(--loss); box-shadow: none; }
+.overlay .cs-slot .icon.lg { width: 40px; height: 40px; }
+.overlay .cs-slot-text { align-items: center; width: 100%; }
+.overlay .cs-slot-text strong { max-width: 100%; font-size: .72rem; font-weight: 650; }
+.overlay .cs-team.enemy .cs-slot .role-line { justify-content: center; gap: 2px; font-size: .7rem; }
+.overlay .cs-slot .pos-name, .overlay .cs-slot .tag { display: none; }
+.overlay .cs-picks { gap: 8px; }
+.overlay .cs-pick-head { gap: 10px; flex-wrap: nowrap; }
+.overlay .cs-pick-head .icon.xl { width: 48px; height: 48px; }
+.overlay .cs-pick-name h2 { font-size: 1.05rem; }
+.overlay .cs-pick-name .muted { font-size: .75rem; }
+.overlay .cs-score strong { font-size: 1.4rem; }
+.overlay .cs-vs { margin-top: 10px; }
+.overlay .cs-vs .small { margin-left: 0; flex-basis: 100%; padding-left: 42px; margin-top: -4px; }
+.overlay .cs-runes { margin-top: 10px; padding-top: 8px; }
+.overlay .runepage { gap: 8px; }
+.overlay .tree { padding: 10px 12px; }
+html:has(body.overlay) { scrollbar-width: thin; }
+
 @media (max-width: 560px) {
   .cs-slot { padding: 6px 8px; gap: 8px; }
   .cs-slot .icon.lg { width: 36px; height: 36px; }

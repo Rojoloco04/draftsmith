@@ -1,0 +1,25 @@
+{{/* The champ select board alone, for the overlay window docked beside
+     the League client (serve --overlay), or any narrow window. It follows
+     the same event stream as /champ-select. */}}
+{{define "overlay"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Overlay · Draftsmith</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<script src="/static/app.js" defer></script>
+</head>
+<body class="overlay">
+{{template "sprite"}}
+<header class="ov-bar">
+  <img src="/static/icon.svg" alt="" width="16" height="16"><span>Draftsmith</span>
+  <button type="button" class="ov-hide" hidden title="Hide until the next champ select" aria-label="Hide until the next champ select">&times;</button>
+</header>
+<main id="cs" class="cs" data-stream="/champ-select/events">
+{{template "board" .CS}}
+</main>
+</body>
+</html>{{end}}

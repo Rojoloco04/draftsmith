@@ -12,6 +12,15 @@ document.addEventListener("error", function (e) {
   }
 }, true);
 
+// The overlay window (serve --overlay) binds draftsmithHide, which hides it
+// until the next champ select. In a browser there's nothing to hide.
+(function () {
+  var btn = document.querySelector(".ov-hide");
+  if (!btn || typeof window.draftsmithHide !== "function") return;
+  btn.hidden = false;
+  btn.addEventListener("click", function () { window.draftsmithHide(); });
+})();
+
 // Champ select: follow the server's event stream, swapping in each board
 // it sends, and count the phase timer down between updates.
 (function () {

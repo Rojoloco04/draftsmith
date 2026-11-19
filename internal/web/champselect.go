@@ -109,6 +109,13 @@ func (s *Server) champSelectPage(w http.ResponseWriter, r *http.Request) {
 	}{s.base(r, "Champ select", "champ-select"), v})
 }
 
+// overlayPage is the board alone, for the overlay window.
+func (s *Server) overlayPage(w http.ResponseWriter, r *http.Request) {
+	v, _ := s.csSnapshot()
+	w.Header().Set("Cache-Control", "no-store")
+	s.render(w, r, "overlay", "overlay", struct{ CS csView }{v})
+}
+
 // csKeepAlive is how often an idle event stream gets a comment, so
 // proxies and the browser don't give up on it.
 const csKeepAlive = 20 * time.Second

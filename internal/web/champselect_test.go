@@ -93,6 +93,26 @@ func TestChampSelectPage(t *testing.T) {
 	}
 }
 
+func TestOverlayPage(t *testing.T) {
+	srv, ts := newTestApp(t, nil)
+	srv.WatchStarted("")
+	srv.WatchPhase(lcu.PhaseChampSelect)
+	srv.WatchBoard(testBoard())
+
+	code, body := get(t, ts, "/overlay")
+	if code != http.StatusOK {
+		t.Fatalf("GET /overlay: %d", code)
+	}
+	// The board and its stream, without the dashboard around it.
+	expect(t, body, `<body class="overlay">`, `class="ov-hide" hidden`, `data-stream="/champ-select/events"`,
+		"Galio", "Katarina", `<span class="pos-name">Mid</span>`)
+	for _, s := range []string{`class="top"`, `class="nav"`, "<footer"} {
+		if strings.Contains(body, s) {
+			t.Errorf("overlay has %s", s)
+		}
+	}
+}
+
 func TestChampSelectLockedAndNote(t *testing.T) {
 	srv, ts := newTestApp(t, nil)
 	srv.WatchStarted("")

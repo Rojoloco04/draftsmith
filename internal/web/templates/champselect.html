@@ -63,7 +63,7 @@
   <span class="cs-slot-text">
     <strong>{{if $s.Name}}{{$s.Name}}{{else if $s.Me}}You{{else}}<span class="muted">Picking…</span>{{end}}</strong>
     <span class="muted role-line">
-      {{if $s.Position}}{{template "role" $s.Position}}{{pos $s.Position}}{{if $.Enemy}} {{pct $s.Odds}}{{end}}{{end}}
+      {{if $s.Position}}{{template "role" $s.Position}}<span class="pos-name">{{pos $s.Position}}</span>{{if $.Enemy}} {{pct $s.Odds}}{{end}}{{end}}
       {{if $s.Me}}<b class="tag">You</b>{{end}}{{if $s.Autofill}}<b class="tag">Autofill</b>{{end}}{{if and $s.Key (not $s.Locked)}}<b class="tag soft">Hover</b>{{end}}
     </span>
   </span>

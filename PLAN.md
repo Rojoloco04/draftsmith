@@ -38,7 +38,15 @@ UI direction (from the user, 2026-11-17): they like the refresh as a baseline bu
 
 The dashboard's champ select page is done (2026-11-18, see "Champ select page" in the Phase 3 section): `serve --watch` runs the watcher in the same process and the page follows it over SSE. Checked live against a real ranked champ select.
 
-**Next up:** the overlay: a borderless always-on-top window docked to the League client that shows the champ select page during champ select only. See "Overlay" in the Phase 3 section. Team comp gaps (damage mix, frontline) are not in the score yet.
+The overlay is built (2026-11-18, see "Overlay" in the Phase 3 section): `serve --overlay` docks a borderless WebView2 window beside the League client during champ select. The page is checked at 320px; the window's docking still needs a look in a real champ select.
+
+**Next up (asked by the user 2026-11-18, in this order):**
+
+1. Summoner spell recommendations in champ select (next to the rune page on each pick card).
+2. Multiple accounts: track more than one Riot ID (first addition: `Rojoloco#SLU`). Today the archive, state, index and dashboard assume one PUUID.
+3. Build recommendations in game. This relaxes the old "nothing during the game" rule; see the compliance rules.
+
+Team comp gaps (damage mix, frontline) are not in the score yet.
 
 Handoff notes (things a new session would otherwise rediscover):
 
@@ -188,9 +196,15 @@ Champ select page (2026-11-18):
 - `lcu.Timer` now reads `isInfinite` (no countdown when set).
 - Checked by hand during a real ranked game: bans, lane odds, locked pick with matchup runes, countdown, and the switch to "In game" when it loaded. Headless Chrome screenshots need `--timeout=3000`, not `--virtual-time-budget` (the open event stream crashes the renderer with the latter).
 
-Overlay (asked 2026-11-17, not built):
+Overlay (2026-11-18):
 
-- Plan: a separate borderless, always-on-top window (WebView2, Windows only) that shows the dashboard's champ select page, positioned against the League client's window and following it, shown only during ChampSelect and hidden otherwise. Quick version first: the champ select page in an Edge `--app=` window, kept on top by the user.
+- `serve --overlay` (implies `--watch`) opens `internal/overlay`: a WebView2 window (`github.com/jchv/go-webview2`, pure Go; there's no C compiler here, so cgo bindings are out) showing `/overlay`, the champ select board without the dashboard around it. My team is left out (the client shows it); the enemy team is a strip with lane odds on top, then the picks. Shown only while gameflow is ChampSelect.
+- Docking: 320 logical px wide (a 1280x720 client centered on 1080p leaves exactly that each side), as tall as the client, to its right if the monitor's work area has room, else its left, else over its right edge (`overlay.Dock`, tested). Scaled by the client monitor's DPI; the window thread is per-monitor DPI aware v2.
+- The client's window is found by owning process (`LeagueClientUx.exe`, the largest visible top-level window), not class or title. Hidden when the client is minimized or hidden (in game it goes to the tray).
+- Z-order: topmost while the client or the overlay is in front; otherwise dropped just behind the foreground window, so it doesn't float over other apps. Shown with `SWP_NOACTIVATE`, so it never takes focus by itself. Borderless popup with `WS_EX_TOOLWINDOW` (no taskbar button or Alt+Tab entry).
+- The × in its bar calls the bound `window.draftsmithHide` and hides it until the next champ select; in a browser the button stays hidden. Alt+F4 on it closes it for the rest of that `serve`.
+- go-webview2's `edge` package locks the main goroutine to the main thread and calls `CoInitializeEx` in `init`. The overlay runs on its own locked thread with its own `CoInitializeEx`, so `serve` keeps its structure. The library briefly shows a framed window at startup before the overlay hides it. WebView2's profile lives in `%LocalAppData%\draftsmith\webview2`.
+- Checking it: headless Chrome won't make a window narrower than ~500px even with `--force-device-scale-factor`; for a true 320px viewport, drive DevTools `Emulation.setDeviceMetricsOverride` (a small Node script over the `--remote-debugging-port` WebSocket works; Node 24 has `WebSocket` built in). Don't screenshot the desktop to check the window: the user may be in a game or have private apps open.
 - Never inject into or modify the client's own UI (client plugin loaders): that's outside what Riot allows and risks the account. A separate window doesn't touch the client.
 
 Plan from here:
@@ -206,7 +220,7 @@ Plan from here:
 
 - Never show or look up other players' names, Riot IDs, ranks, or stats during champ select, including teammates outside my party. Riot policy: products cannot de-anonymize players who can't be identified from visible information. Ignore any identity fields in the session payload; don't log them.
 - Suggestions only. Never hover, pick, ban, or lock in automatically ("apps that dictate player decisions" are not allowed).
-- Nothing during the game itself. The watcher goes idle when gameflow leaves ChampSelect.
+- In game (relaxed 2026-11-18 at the user's request, was "nothing during the game itself"): only static build recommendations for my own champion, of the kind Riot-approved apps show. No enemy cooldown, summoner spell or jungle timers, no tracking of anything the game doesn't show, and no player lookups. Riot's Live Client Data API (`https://127.0.0.1:2999`) is fine for reading my own champion and items.
 - No League Classic data, ever.
 - Personal key means personal use: don't expose the dashboard publicly.
 
