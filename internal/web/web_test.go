@@ -66,10 +66,10 @@ func newTestApp(t *testing.T, m MetaSource) (*Server, *httptest.Server) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	if _, err := d.Index(ctx, s, fixture.MePUUID); err != nil {
+	if _, err := d.Index(ctx, s, []string{fixture.MePUUID}); err != nil {
 		t.Fatal(err)
 	}
-	srv, err := New(d, "Tester#NA1", nil)
+	srv, err := New(d, []Account{{PUUID: fixture.MePUUID, RiotID: "Tester#NA1"}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +257,7 @@ func TestEmptyIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	srv, err := New(d, "Nobody#NA1", nil)
+	srv, err := New(d, []Account{{PUUID: "nobody", RiotID: "Nobody#NA1"}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

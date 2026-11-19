@@ -34,15 +34,15 @@ func Archive(s *store.Store, specs []Spec, withReal bool) error {
 	if err != nil {
 		return err
 	}
-	st.PUUID = MePUUID
-	st.RiotID = "Tester#NA1"
-	st.Platform = "na1"
+	if st.Find(MePUUID) == nil {
+		st.Accounts = append(st.Accounts, store.Account{PUUID: MePUUID, RiotID: "Tester#NA1", Platform: "na1", BackfillDone: map[int]bool{}})
+	}
 	return s.SaveState(st)
 }
 
-// RankSnapshot writes one day's standings into s.
+// RankSnapshot writes one day's solo queue standings for MePUUID into s.
 func RankSnapshot(s *store.Store, day time.Time, tier, division string, lp, wins, losses int) error {
-	return s.PutRankSnapshot(day, []riot.LeagueEntry{{
+	return s.PutRankSnapshot(MePUUID, day, []riot.LeagueEntry{{
 		QueueType: "RANKED_SOLO_5x5", Tier: tier, Rank: division, LeaguePoints: lp, Wins: wins, Losses: losses,
 	}})
 }

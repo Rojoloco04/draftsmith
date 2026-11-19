@@ -29,7 +29,7 @@ type Result struct {
 
 // Sync lists match ids for each queue, then archives any match and timeline
 // not already stored. It is safe to interrupt and rerun.
-func Sync(ctx context.Context, c *riot.Client, s *store.Store, st *store.State, opt Options) (Result, error) {
+func Sync(ctx context.Context, c *riot.Client, s *store.Store, st *store.Account, opt Options) (Result, error) {
 	var res Result
 	logf := func(format string, a ...any) {
 		if opt.Log != nil {

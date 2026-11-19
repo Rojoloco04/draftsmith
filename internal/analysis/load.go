@@ -11,8 +11,9 @@ import (
 	"github.com/rojoloco04/draftsmith/internal/store"
 )
 
-// LoadGames parses every archived match for puuid, oldest first.
-func LoadGames(s *store.Store, puuid string, queues map[int]bool) ([]Game, error) {
+// LoadGames parses every archived match played by one of my accounts
+// (puuids), oldest first.
+func LoadGames(s *store.Store, puuids []string, queues map[int]bool) ([]Game, error) {
 	ids, err := s.MatchIDs()
 	if err != nil {
 		return nil, err
@@ -39,8 +40,11 @@ func LoadGames(s *store.Store, puuid string, queues map[int]bool) ([]Game, error
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("%s timeline: %w", id, err)
 		}
-		if g, ok := Extract(&m, tl, puuid); ok {
-			games = append(games, g)
+		for _, puuid := range puuids {
+			if g, ok := Extract(&m, tl, puuid); ok {
+				games = append(games, g)
+				break
+			}
 		}
 	}
 	sort.Slice(games, func(i, j int) bool { return games[i].Start.Before(games[j].Start) })

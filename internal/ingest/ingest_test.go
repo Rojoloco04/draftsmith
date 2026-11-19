@@ -82,7 +82,7 @@ func setup(t *testing.T, f *fakeRiot) (*riot.Client, *store.Store) {
 func TestBackfillThenIncremental(t *testing.T) {
 	f := newFake(230, 30)
 	c, s := setup(t, f)
-	st := store.State{PUUID: fixture.MePUUID, BackfillDone: map[int]bool{}}
+	st := store.Account{PUUID: fixture.MePUUID, BackfillDone: map[int]bool{}}
 	opt := Options{Queues: []int{riot.QueueSoloDuo}, Timelines: true}
 
 	res, err := Sync(context.Background(), c, s, &st, opt)
@@ -119,7 +119,7 @@ func TestBackfillThenIncremental(t *testing.T) {
 func TestInterruptedBackfillResumes(t *testing.T) {
 	f := newFake(150, 0)
 	c, s := setup(t, f)
-	st := store.State{PUUID: fixture.MePUUID, BackfillDone: map[int]bool{}}
+	st := store.Account{PUUID: fixture.MePUUID, BackfillDone: map[int]bool{}}
 
 	if _, err := Sync(context.Background(), c, s, &st, Options{Queues: []int{riot.QueueSoloDuo}, Max: 120}); err != nil {
 		t.Fatal(err)

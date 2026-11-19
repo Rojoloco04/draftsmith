@@ -22,6 +22,19 @@
           <p class="rank-line"><strong>{{.LP}} LP</strong> <span class="muted">· {{.Wins}}W {{.Losses}}L · {{pct (recordPct .Wins .Losses)}} this split</span></p>
           <p class="muted small">{{$.RiotID}} · as of {{.Day}}</p>
         </div>
+      {{else}}{{if .Ranks}}
+        <div class="acct-ranks">
+          <span class="label">{{$.Queue.Label}} · {{len $.Accounts}} accounts</span>
+          {{range .Ranks}}{{$a := .RiotID}}{{with .Rank}}
+          <div class="acct-rank">
+            <img class="crest" src="{{rankCrest .Tier}}" alt="" width="40" height="40">
+            <div>
+              <strong>{{rankLabel .Tier .Division}}</strong> <span class="muted">{{.LP}} LP · {{.Wins}}W {{.Losses}}L</span>
+              <p class="muted small">{{$a}} · as of {{.Day}}</p>
+            </div>
+          </div>
+          {{end}}{{end}}
+        </div>
       {{else}}
         <span class="emblem"><img src="{{rankEmblem ""}}" alt=""></span>
         <div>
@@ -29,7 +42,7 @@
           <h2 class="rank-name">Unranked</h2>
           <p class="muted small">No rank snapshot yet. Each sync records today's standing.</p>
         </div>
-      {{end}}
+      {{end}}{{end}}
     </div>
     <div class="hero-form">
       <span class="label">Last {{len .Recent}} games</span>
@@ -45,7 +58,8 @@
 <div class="grid two">
   <section class="card">
     <h2>Rank history</h2>
-    {{if .Rank}}
+    {{if .LPChart}}
+      {{if .Ranks}}<div class="legend">{{range $i, $r := .Ranks}}<span class="key {{$r.Class}}"></span>{{$r.RiotID}} {{end}}</div>{{end}}
       {{.LPChart}}
       {{if lt .RankDays 7}}<p class="note">Riot only exposes the current standing, so history starts with the first snapshot ({{.RankFrom}}) and grows by one point per day of syncing.</p>{{end}}
     {{else}}

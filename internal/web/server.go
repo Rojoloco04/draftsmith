@@ -46,9 +46,15 @@ type syncView struct {
 	Wait bool
 }
 
+// Account is one of my Riot accounts.
+type Account struct {
+	PUUID  string
+	RiotID string
+}
+
 type Server struct {
-	db     *db.DB
-	riotID string
+	db       *db.DB
+	accounts []Account
 	log    *log.Logger
 	pages  map[string]*template.Template
 	meta   MetaSource
@@ -59,13 +65,17 @@ type Server struct {
 	cs      champSelect
 }
 
-// New builds a server over an indexed database. riotID is the tracked
-// player, shown in the header.
-func New(d *db.DB, riotID string, logger *log.Logger) (*Server, error) {
+// New builds a server over an indexed database of my accounts' games.
+// With more than one account, the header can switch between them and
+// all of them together.
+func New(d *db.DB, accounts []Account, logger *log.Logger) (*Server, error) {
 	if logger == nil {
 		logger = log.New(io.Discard, "", 0)
 	}
-	s := &Server{db: d, riotID: riotID, log: logger, pages: map[string]*template.Template{}}
+	if len(accounts) == 0 {
+		return nil, errors.New("web: no accounts")
+	}
+	s := &Server{db: d, accounts: accounts, log: logger, pages: map[string]*template.Template{}}
 	for _, p := range []string{"overview", "matches", "match", "champions", "champion", "tierlist", "champselect", "error"} {
 		t, err := template.New(p).Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/parts.html", "templates/"+p+".html")
 		if err != nil {
@@ -123,6 +133,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /tier-list", s.tierListPage)
 	mux.HandleFunc("GET /sync", s.syncStatus)
 	mux.HandleFunc("POST /sync", s.syncNow)
+	mux.HandleFunc("GET /account", s.switchAccount)
 	mux.HandleFunc("GET /champ-select", s.champSelectPage)
 	mux.HandleFunc("GET /champ-select/events", s.champSelectEvents)
 	mux.HandleFunc("GET /overlay", s.overlayPage)
@@ -134,10 +145,15 @@ func (s *Server) Handler() http.Handler {
 
 // Base is the data every page's layout needs.
 type Base struct {
-	Title  string
-	Nav    string
-	Path   string
+	Title string
+	Nav   string
+	Path  string
+	// RiotID names the selected account, or "All accounts".
 	RiotID string
+	// Account is the selected account, nil for all of them. Accounts is
+	// every account; the header offers a switch when there are several.
+	Account  *Account
+	Accounts []Account
 	Queue  queueOpt
 	Queues []queueOpt
 	Status Status
@@ -171,17 +187,79 @@ func queueFrom(r *http.Request) queueOpt {
 }
 
 func (s *Server) base(r *http.Request, title, nav string) Base {
+	acct := s.account(r)
 	b := Base{
-		Title: title, Nav: nav, Path: r.URL.Path, RiotID: s.riotID,
+		Title: title, Nav: nav, Path: r.URL.Path, RiotID: "All accounts", Account: acct, Accounts: s.accounts,
 		Queue: queueFrom(r), Queues: queueOpts,
 		Status: s.getStatus(), Sync: s.syncView(false), Now: time.Now(),
 	}
-	rank, err := s.db.LatestRank(r.Context(), rankQueue(b.Queue))
-	if err != nil {
-		s.log.Printf("latest rank: %v", err)
+	if acct != nil {
+		b.RiotID = acct.RiotID
+		rank, err := s.db.LatestRank(r.Context(), acct.PUUID, rankQueue(b.Queue))
+		if err != nil {
+			s.log.Printf("latest rank: %v", err)
+		}
+		b.Rank = rank
 	}
-	b.Rank = rank
 	return b
+}
+
+// acctCookie holds the selected account's Riot ID; without it (or with
+// one no longer tracked) pages show every account.
+const acctCookie = "account"
+
+// account is the account selected for r, nil for all of them. With one
+// account there is nothing to choose.
+func (s *Server) account(r *http.Request) *Account {
+	if len(s.accounts) == 1 {
+		return &s.accounts[0]
+	}
+	c, err := r.Cookie(acctCookie)
+	if err != nil {
+		return nil
+	}
+	for i, a := range s.accounts {
+		if strings.EqualFold(a.RiotID, c.Value) {
+			return &s.accounts[i]
+		}
+	}
+	return nil
+}
+
+// puuid is the selected account's PUUID, "" for all of them (a
+// db.GameFilter's Account).
+func (s *Server) puuid(r *http.Request) string {
+	if a := s.account(r); a != nil {
+		return a.PUUID
+	}
+	return ""
+}
+
+// switchAccount selects an account (?id=Name#TAG, or all) and goes back
+// to the page it came from.
+func (s *Server) switchAccount(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	c := &http.Cookie{Name: acctCookie, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode}
+	id := q.Get("id")
+	for _, a := range s.accounts {
+		if strings.EqualFold(a.RiotID, id) {
+			c.Value, c.MaxAge = a.RiotID, 365*24*3600
+		}
+	}
+	if c.Value == "" {
+		c.MaxAge = -1 // all accounts
+	}
+	http.SetCookie(w, c)
+	http.Redirect(w, r, localPath(q.Get("back")), http.StatusSeeOther)
+}
+
+// localPath returns p if it's a path on this site, else "/", so the
+// account switch can't redirect elsewhere.
+func localPath(p string) string {
+	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.HasPrefix(p, "/\\") {
+		return "/"
+	}
+	return p
 }
 
 // render executes a page. With block set (htmx partial requests) only that

@@ -23,10 +23,17 @@
       <a href="/champ-select" data-nav="champ-select" {{if eq .Nav "champ-select"}}aria-current="page"{{end}}><svg class="i"><use href="#i-select"/></svg><span>Champ select</span></a>
     </nav>
     <div class="top-end">
-      <span class="who">
-        {{with .Rank}}<img class="crest" src="{{rankCrest .Tier}}" alt="" width="20" height="20">{{end}}
-        <span class="who-text"><strong>{{.RiotID}}</strong>{{with .Rank}}<span class="muted">{{rankLabel .Tier .Division}} · {{.LP}} LP</span>{{end}}</span>
-      </span>
+      {{if gt (len .Accounts) 1}}
+      <details class="acct-menu">
+        <summary class="who" title="Switch account">{{template "who" .}}<svg class="i caret" aria-hidden="true"><use href="#i-caret"/></svg></summary>
+        <nav class="menu" aria-label="Accounts">
+          <a href="/account?id=all&amp;back={{.Path}}%3Fqueue%3D{{.Queue.Key}}"{{if not .Account}} aria-current="true"{{end}}>All accounts<span class="muted">{{len .Accounts}} combined</span></a>
+          {{range .Accounts}}<a href="/account?id={{.RiotID}}&amp;back={{$.Path}}%3Fqueue%3D{{$.Queue.Key}}"{{if and $.Account (eq $.Account.PUUID .PUUID)}} aria-current="true"{{end}}>{{.RiotID}}</a>{{end}}
+        </nav>
+      </details>
+      {{else}}
+      <span class="who">{{template "who" .}}</span>
+      {{end}}
       {{template "sync" .Sync}}
     </div>
   </div>
@@ -45,6 +52,12 @@
 </body>
 </html>{{end}}
 
+{{/* The header's account pill: the selected account and its rank. */}}
+{{define "who"}}
+  {{with .Rank}}<img class="crest" src="{{rankCrest .Tier}}" alt="" width="20" height="20">{{end}}
+  <span class="who-text"><strong>{{.RiotID}}</strong>{{with .Rank}}<span class="muted">{{rankLabel .Tier .Division}} · {{.LP}} LP</span>{{else}}{{if not .Account}}<span class="muted">{{len .Accounts}} accounts</span>{{end}}{{end}}</span>
+{{end}}
+
 {{/* Icons used across pages: <svg class="i"><use href="#i-..."/></svg>.
      Role glyphs (#r-top etc.) are filled; the rest are stroked. */}}
 {{define "sprite"}}
@@ -56,7 +69,8 @@
     <symbol id="i-tiers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20V11M12 20V4M18 20v-6M3 20h18"/></symbol>
     <symbol id="i-select" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></symbol>
-    <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10l5 5 5-5"/></symbol>
+    <symbol id="i-arrow"viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
     <symbol id="r-top" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h14l-4 4H7v6l-4 4z"/><path opacity=".35" d="M21 7v14H7l4-4h6v-6zM10 10h4v4h-4z"/></symbol>
     <symbol id="r-jungle" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21c-1-6-1.6-12 0-18 1.6 6 1 12 0 18z"/><path d="M11 20.5C8 16.5 6 12.5 4.5 7c3.2 3 5.5 7 6.5 13.5zM13 20.5c3-4 5-8 6.5-13.5-3.2 3-5.5 7-6.5 13.5z"/></symbol>
     <symbol id="r-mid" viewBox="0 0 24 24" fill="currentColor"><path opacity=".35" d="M3 3h10l-4 4H7v2l-4 4zM21 21H11l4-4h2v-2l4-4z"/><path d="M17 3h4v4L7 21H3v-4z"/></symbol>

@@ -66,7 +66,7 @@ func cmdServe(ctx context.Context, args []string) error {
 	default:
 		sy, err = newSyncer(c, *rate)
 		if err != nil {
-			if st.PUUID == "" {
+			if len(st.Accounts) == 0 {
 				return err
 			}
 			disabled = err.Error()
@@ -77,7 +77,7 @@ func cmdServe(ctx context.Context, args []string) error {
 	}
 
 	// Without an archive there is nothing to show, so sync once up front.
-	if st.PUUID == "" {
+	if len(st.Accounts) == 0 {
 		if sy == nil {
 			return errors.New("no archive yet; run `draftsmith sync --riot-id Name#TAG` first")
 		}
@@ -95,18 +95,18 @@ func cmdServe(ctx context.Context, args []string) error {
 	if d.Rebuilt {
 		logger.Printf("building the index at %s from the archive", d.Path())
 	}
-	if res, err := d.Index(ctx, s, st.PUUID); err != nil {
+	if res, err := d.Index(ctx, s, st.PUUIDs()); err != nil {
 		return fmt.Errorf("indexing: %w", err)
 	} else if res.Added+res.Updated > 0 {
 		logger.Printf("indexed %d new games (%d updated)", res.Added, res.Updated)
 	}
 
-	srv, err := web.New(d, st.RiotID, logger)
+	srv, err := web.New(d, webAccounts(st), logger)
 	if err != nil {
 		return err
 	}
 	srv.SetStatus(func(s *web.Status) {
-		s.LastSync = st.LastSync
+		s.LastSync = st.LastSync()
 		s.SyncDisabled = disabled
 	})
 	var m *meta.Service
@@ -170,7 +170,7 @@ func cmdServe(ctx context.Context, args []string) error {
 		// shutdown.
 		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
-	logger.Printf("dashboard for %s at http://%s", st.RiotID, ln.Addr())
+	logger.Printf("dashboard for %s at http://%s", st.RiotIDs(), ln.Addr())
 
 	if sy != nil {
 		// The Refresh button asks for a sync now. One request can wait;
@@ -213,8 +213,8 @@ func syncLoop(ctx context.Context, sy *syncer, d *db.DB, srv *web.Server, every 
 		if ctx.Err() != nil {
 			return
 		}
-		if st.PUUID != "" {
-			res, ierr := d.Index(ctx, sy.store, st.PUUID)
+		if len(st.Accounts) > 0 {
+			res, ierr := d.Index(ctx, sy.store, st.PUUIDs())
 			if ierr != nil {
 				err = errors.Join(err, fmt.Errorf("indexing: %w", ierr))
 			} else if res.Added+res.Updated > 0 {
@@ -241,6 +241,15 @@ func syncLoop(ctx context.Context, sy *syncer, d *db.DB, srv *web.Server, every 
 			t.Reset(every)
 		}
 	}
+}
+
+// webAccounts lists the tracked accounts for the dashboard.
+func webAccounts(st store.State) []web.Account {
+	out := make([]web.Account, len(st.Accounts))
+	for i, a := range st.Accounts {
+		out[i] = web.Account{PUUID: a.PUUID, RiotID: a.RiotID}
+	}
+	return out
 }
 
 // checkListenAddr refuses wildcard addresses. There is no auth, so the

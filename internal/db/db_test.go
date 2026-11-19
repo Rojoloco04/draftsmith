@@ -33,6 +33,9 @@ func specs() []fixture.Spec {
 	return out
 }
 
+// me is the fixture's one tracked account.
+var me = []string{fixture.MePUUID}
+
 func setup(t *testing.T) (*DB, *store.Store) {
 	t.Helper()
 	dir := t.TempDir()
@@ -59,7 +62,7 @@ func setup(t *testing.T) (*DB, *store.Store) {
 func TestIndexMatchesExtract(t *testing.T) {
 	ctx := context.Background()
 	d, s := setup(t)
-	res, err := d.Index(ctx, s, fixture.MePUUID)
+	res, err := d.Index(ctx, s, me)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +70,7 @@ func TestIndexMatchesExtract(t *testing.T) {
 		t.Fatalf("first index: %+v", res)
 	}
 
-	want, err := analysis.LoadGames(s, fixture.MePUUID, nil)
+	want, err := analysis.LoadGames(s, me, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +97,7 @@ func TestIndexMatchesExtract(t *testing.T) {
 	}
 
 	// Second run is a no-op.
-	res, err = d.Index(ctx, s, fixture.MePUUID)
+	res, err = d.Index(ctx, s, me)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +109,7 @@ func TestIndexMatchesExtract(t *testing.T) {
 func TestMatchDetail(t *testing.T) {
 	ctx := context.Background()
 	d, s := setup(t)
-	if _, err := d.Index(ctx, s, fixture.MePUUID); err != nil {
+	if _, err := d.Index(ctx, s, me); err != nil {
 		t.Fatal(err)
 	}
 	m, tl := fixture.Real()
@@ -153,7 +156,7 @@ func TestMatchDetail(t *testing.T) {
 func TestNoIdentityStored(t *testing.T) {
 	ctx := context.Background()
 	d, s := setup(t)
-	if _, err := d.Index(ctx, s, fixture.MePUUID); err != nil {
+	if _, err := d.Index(ctx, s, me); err != nil {
 		t.Fatal(err)
 	}
 	var m map[string]any
@@ -214,7 +217,7 @@ func dumpTable(t *testing.T, s *sql.DB, table string) string {
 func TestFiltersAndPaging(t *testing.T) {
 	ctx := context.Background()
 	d, s := setup(t)
-	if _, err := d.Index(ctx, s, fixture.MePUUID); err != nil {
+	if _, err := d.Index(ctx, s, me); err != nil {
 		t.Fatal(err)
 	}
 	solo, err := d.Games(ctx, GameFilter{Queue: riot.QueueSoloDuo, NoRemakes: true})
@@ -248,7 +251,7 @@ func TestFiltersAndPaging(t *testing.T) {
 func TestLateTimelineReindexes(t *testing.T) {
 	ctx := context.Background()
 	d, s := setup(t)
-	if _, err := d.Index(ctx, s, fixture.MePUUID); err != nil {
+	if _, err := d.Index(ctx, s, me); err != nil {
 		t.Fatal(err)
 	}
 	sp := specs()[4]
@@ -257,7 +260,7 @@ func TestLateTimelineReindexes(t *testing.T) {
 		t.Fatal("game 4 should start without a timeline")
 	}
 	s.PutTimeline(sp.ID, fixture.MustJSON(fixture.Timeline(sp)))
-	res, err := d.Index(ctx, s, fixture.MePUUID)
+	res, err := d.Index(ctx, s, me)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,14 +286,14 @@ func TestRanksAndSchemaRebuild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := d.Index(ctx, s, fixture.MePUUID)
+	res, err := d.Index(ctx, s, me)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if res.Ranks != 2 {
 		t.Errorf("ranks = %d", res.Ranks)
 	}
-	hist, err := d.RankHistory(ctx, "RANKED_SOLO_5x5")
+	hist, err := d.RankHistory(ctx, fixture.MePUUID, "RANKED_SOLO_5x5")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,13 +322,13 @@ func TestRanksAndSchemaRebuild(t *testing.T) {
 	if len(games) != 0 {
 		t.Errorf("rebuilt schema still has %d games", len(games))
 	}
-	res, _ = d.Index(ctx, s, fixture.MePUUID)
+	res, _ = d.Index(ctx, s, me)
 	if res.Added != 2 {
 		t.Errorf("reindex after rebuild: %+v", res)
 	}
 
 	// A different tracked player clears the index.
-	res, err = d.Index(ctx, s, "someone-else")
+	res, err = d.Index(ctx, s, []string{"someone-else"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +353,7 @@ func TestMetaCacheSurvivesRebuild(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := d.Rebuild(ctx, s, fixture.MePUUID); err != nil {
+	if _, err := d.Rebuild(ctx, s, me); err != nil {
 		t.Fatal(err)
 	}
 	e, err := d.MetaEntry(ctx, "tierlist")
@@ -359,5 +362,75 @@ func TestMetaCacheSurvivesRebuild(t *testing.T) {
 	}
 	if !e.FetchedAt.Equal(at) || e.Patch != "16.22" || e.Body != "second" {
 		t.Errorf("got %+v", e)
+	}
+}
+
+func TestTwoAccounts(t *testing.T) {
+	ctx := context.Background()
+	d, s := setup(t)
+	const alt = "alt-puuid"
+	altGames := []fixture.Spec{
+		{ID: "NA1_900", StartMs: 1_800_000_000_000, Champion: "Sylas", Opponent: "Ahri", Win: true, PUUID: alt},
+		{ID: "NA1_901", StartMs: 1_800_000_100_000, Champion: "Sylas", Opponent: "Zed", PUUID: alt},
+	}
+	if err := fixture.Archive(s, altGames, false); err != nil {
+		t.Fatal(err)
+	}
+	day := time.Date(2026, 11, 18, 0, 0, 0, 0, time.Local)
+	if err := s.PutRankSnapshot(alt, day, []riot.LeagueEntry{{QueueType: "RANKED_SOLO_5x5", Tier: "GOLD", Rank: "I", LeaguePoints: 75}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.RankSnapshot(s, day, "EMERALD", "IV", 40, 20, 20); err != nil {
+		t.Fatal(err)
+	}
+
+	// Indexed for the first account only, the alt's games are skipped.
+	res, err := d.Index(ctx, s, me)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mine := res.Added
+	if res.Skipped != 2 || mine == 0 {
+		t.Fatalf("first account: %+v", res)
+	}
+
+	// Adding the alt indexes its games without starting over.
+	res, err = d.Index(ctx, s, []string{fixture.MePUUID, alt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Added != 2 || res.Skipped != 0 {
+		t.Errorf("adding an account: %+v", res)
+	}
+	all, _ := d.Games(ctx, GameFilter{})
+	got, _ := d.Games(ctx, GameFilter{Account: alt})
+	first, _ := d.Games(ctx, GameFilter{Account: fixture.MePUUID})
+	if len(all) != mine+2 || len(got) != 2 || len(first) != mine {
+		t.Errorf("games: %d in all, %d for the alt, %d for the first (want %d, 2, %d)", len(all), len(got), len(first), mine+2, mine)
+	}
+	for _, g := range got {
+		if g.Account != alt || g.Champion != "Sylas" {
+			t.Errorf("alt game: %s %s %s", g.MatchID, g.Account, g.Champion)
+		}
+	}
+
+	// Ranks are kept per account.
+	if r, err := d.LatestRank(ctx, alt, "RANKED_SOLO_5x5"); err != nil || r == nil || r.Tier != "GOLD" || r.LP != 75 {
+		t.Errorf("alt rank: %+v, %v", r, err)
+	}
+	if r, err := d.LatestRank(ctx, fixture.MePUUID, "RANKED_SOLO_5x5"); err != nil || r == nil || r.Tier != "EMERALD" {
+		t.Errorf("first account's rank: %+v, %v", r, err)
+	}
+
+	// Dropping an account starts over without it.
+	if _, err := d.Index(ctx, s, []string{alt}); err != nil {
+		t.Fatal(err)
+	}
+	all, _ = d.Games(ctx, GameFilter{})
+	if len(all) != 2 {
+		t.Errorf("after dropping the first account: %d games", len(all))
+	}
+	if r, _ := d.LatestRank(ctx, fixture.MePUUID, "RANKED_SOLO_5x5"); r != nil {
+		t.Errorf("dropped account's rank is still indexed: %+v", r)
 	}
 }

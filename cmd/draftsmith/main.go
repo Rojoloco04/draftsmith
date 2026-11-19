@@ -46,7 +46,12 @@ Usage:
 Config comes from flags, environment variables, or a .env file in the
 current directory:
   RIOT_API_KEY        your Riot key (required for sync)
-  DRAFTSMITH_RIOT_ID    Name#TAG
+  DRAFTSMITH_RIOT_ID    Name#TAG; sync adds it to the tracked accounts
+
+Several accounts can share one archive: run "draftsmith sync --riot-id
+Name#TAG" once per account to add it. After that, sync and serve keep
+every tracked account up to date, and the dashboard can switch between
+them or show them together.
   DRAFTSMITH_PLATFORM   na1, euw1, kr, ... (default na1)
   DRAFTSMITH_DATA       archive directory (default ./data)
   DRAFTSMITH_LEAGUE_DIR League install directory, for watch
@@ -139,7 +144,7 @@ func cmdSync(ctx context.Context, args []string) error {
 		fmt.Println("interrupted; rerun sync to continue where it stopped")
 		syncErr = nil
 	}
-	if st.PUUID == "" {
+	if len(st.Accounts) == 0 {
 		return syncErr
 	}
 	// The archive is the source of truth; keep the dashboard index current.
@@ -187,60 +192,103 @@ func newSyncer(c common, rate string) (*syncer, error) {
 	return &syncer{client: client, store: s, queues: queues, riotID: c.riotID, dataDir: c.data, timelines: true}, nil
 }
 
-// run resolves the account if needed, snapshots today's rank, archives new
-// games, and saves state. Progress goes to out. The returned state is valid
-// (with a PUUID) whenever the account is known, even if syncing failed.
+// run adds the --riot-id account if it isn't tracked yet, then for every
+// tracked account snapshots today's rank, archives new games, and saves
+// state. Progress goes to out. The returned state lists every known
+// account, even if syncing failed.
 func (sy *syncer) run(ctx context.Context, out io.Writer) (store.State, error) {
 	s := sy.store
 	st, err := s.LoadState()
 	if err != nil {
 		return st, err
 	}
-
-	if sy.riotID != "" && !strings.EqualFold(sy.riotID, st.RiotID) || st.PUUID == "" {
-		if sy.riotID == "" {
-			return st, errors.New("first sync needs --riot-id Name#TAG (or DRAFTSMITH_RIOT_ID)")
+	if sy.riotID != "" && !tracks(st, sy.riotID) {
+		if err := sy.addAccount(ctx, &st, out); err != nil {
+			return st, err
 		}
-		name, tag, ok := strings.Cut(sy.riotID, "#")
-		if !ok {
-			return st, fmt.Errorf("riot id %q should look like Name#TAG", sy.riotID)
-		}
-		acct, err := sy.client.AccountByRiotID(ctx, name, tag)
-		if err != nil {
-			return st, fmt.Errorf("looking up %s: %w", sy.riotID, err)
-		}
-		if st.PUUID != "" && st.PUUID != acct.PUUID {
-			return st, fmt.Errorf("%s holds games for a different account (%s); use a separate --data directory", sy.dataDir, st.RiotID)
-		}
-		st.PUUID = acct.PUUID
-		st.RiotID = acct.GameName + "#" + acct.TagLine
-		st.Platform = sy.client.Platform()
-		fmt.Fprintf(out, "tracking %s (%s)\n", st.RiotID, st.Platform)
+	}
+	if len(st.Accounts) == 0 {
+		return st, errors.New("first sync needs --riot-id Name#TAG (or DRAFTSMITH_RIOT_ID)")
 	}
 
-	if entries, err := sy.client.LeagueEntries(ctx, st.PUUID); err != nil {
+	var errs []error
+	for i := range st.Accounts {
+		a := &st.Accounts[i]
+		if a.Platform != "" && a.Platform != sy.client.Platform() {
+			fmt.Fprintf(out, "skipping %s: it's on %s and this sync uses %s (--platform)\n", a.RiotID, a.Platform, sy.client.Platform())
+			continue
+		}
+		if len(st.Accounts) > 1 {
+			fmt.Fprintf(out, "%s:\n", a.RiotID)
+		}
+		if err := sy.runAccount(ctx, a, out); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", a.RiotID, err))
+		}
+		if err := s.SaveState(st); err != nil {
+			return st, err
+		}
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return st, errors.Join(errs...)
+}
+
+// tracks reports whether riotID is one of the tracked accounts.
+func tracks(st store.State, riotID string) bool {
+	for _, a := range st.Accounts {
+		if strings.EqualFold(a.RiotID, riotID) {
+			return true
+		}
+	}
+	return false
+}
+
+// addAccount looks up sy.riotID and tracks it. An account already tracked
+// under an older Riot ID is renamed instead.
+func (sy *syncer) addAccount(ctx context.Context, st *store.State, out io.Writer) error {
+	name, tag, ok := strings.Cut(sy.riotID, "#")
+	if !ok {
+		return fmt.Errorf("riot id %q should look like Name#TAG", sy.riotID)
+	}
+	acct, err := sy.client.AccountByRiotID(ctx, name, tag)
+	if err != nil {
+		return fmt.Errorf("looking up %s: %w", sy.riotID, err)
+	}
+	riotID := acct.GameName + "#" + acct.TagLine
+	if a := st.Find(acct.PUUID); a != nil {
+		fmt.Fprintf(out, "%s is now %s\n", a.RiotID, riotID)
+		a.RiotID = riotID
+	} else {
+		st.Accounts = append(st.Accounts, store.Account{
+			PUUID: acct.PUUID, RiotID: riotID, Platform: sy.client.Platform(), BackfillDone: map[int]bool{},
+		})
+		fmt.Fprintf(out, "tracking %s (%s)\n", riotID, sy.client.Platform())
+	}
+	return sy.store.SaveState(*st)
+}
+
+// runAccount snapshots one account's rank and archives its new games.
+func (sy *syncer) runAccount(ctx context.Context, a *store.Account, out io.Writer) error {
+	if entries, err := sy.client.LeagueEntries(ctx, a.PUUID); err != nil {
 		fmt.Fprintf(out, "warning: could not snapshot rank: %v\n", err)
-	} else if err := s.PutRankSnapshot(time.Now(), entries); err != nil {
-		return st, err
+	} else if err := sy.store.PutRankSnapshot(a.PUUID, time.Now(), entries); err != nil {
+		return err
 	} else {
 		for _, e := range entries {
 			fmt.Fprintf(out, "%s: %s %s %d LP (%dW %dL)\n", e.QueueType, e.Tier, e.Rank, e.LeaguePoints, e.Wins, e.Losses)
 		}
 	}
-
-	res, syncErr := ingest.Sync(ctx, sy.client, s, &st, ingest.Options{
+	res, err := ingest.Sync(ctx, sy.client, sy.store, a, ingest.Options{
 		Queues:    sy.queues,
 		Timelines: sy.timelines,
 		Max:       sy.max,
 		Log:       out,
 	})
-	st.LastSync = time.Now()
-	if err := s.SaveState(st); err != nil {
-		return st, err
-	}
+	a.LastSync = time.Now()
 	fmt.Fprintf(out, "archived %d matches and %d timelines (%d timelines no longer on Riot's side, %d errors)\n",
 		res.NewMatches, res.NewTimelines, res.MissingTimelines, res.Errors)
-	return st, syncErr
+	return err
 }
 
 // indexArchive brings the SQLite index in the data dir up to date.
@@ -250,7 +298,7 @@ func indexArchive(ctx context.Context, s *store.Store, st store.State, out io.Wr
 		return err
 	}
 	defer d.Close()
-	res, err := d.Index(ctx, s, st.PUUID)
+	res, err := d.Index(ctx, s, st.PUUIDs())
 	if err != nil {
 		return err
 	}
@@ -272,7 +320,7 @@ func cmdReindex(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if st.PUUID == "" {
+	if len(st.Accounts) == 0 {
 		return errors.New("no archive yet; run `draftsmith sync --riot-id Name#TAG` first")
 	}
 	d, err := db.OpenDir(ctx, *data)
@@ -281,42 +329,63 @@ func cmdReindex(ctx context.Context, args []string) error {
 	}
 	defer d.Close()
 	start := time.Now()
-	res, err := d.Rebuild(ctx, s, st.PUUID)
+	res, err := d.Rebuild(ctx, s, st.PUUIDs())
 	if err != nil {
 		return err
 	}
 	fmt.Printf("indexed %d games and %d rank snapshots into %s in %s",
 		res.Added, res.Ranks, filepath.Join(*data, db.FileName), time.Since(start).Round(time.Millisecond))
 	if res.Skipped > 0 {
-		fmt.Printf(" (%d archived matches without %s skipped)", res.Skipped, st.RiotID)
+		fmt.Printf(" (%d archived matches without %s skipped)", res.Skipped, st.RiotIDs())
 	}
 	fmt.Println()
 	return nil
 }
 
-func loadForAnalysis(c common) (*store.Store, store.State, []analysis.Game, error) {
+// loadForAnalysis reads the games of one account (Name#TAG) or, with
+// account "" or "all", of every tracked account. It returns the accounts
+// it read.
+func loadForAnalysis(c common, account string) (*store.Store, []store.Account, []analysis.Game, error) {
 	s, err := store.Open(c.data)
 	if err != nil {
-		return nil, store.State{}, nil, err
+		return nil, nil, nil, err
 	}
 	st, err := s.LoadState()
 	if err != nil {
-		return nil, st, nil, err
+		return nil, nil, nil, err
 	}
-	if st.PUUID == "" {
-		return nil, st, nil, errors.New("no archive yet; run `draftsmith sync --riot-id Name#TAG` first")
+	if len(st.Accounts) == 0 {
+		return nil, nil, nil, errors.New("no archive yet; run `draftsmith sync --riot-id Name#TAG` first")
+	}
+	accts := st.Accounts
+	if account != "" && !strings.EqualFold(account, "all") {
+		accts = nil
+		for _, a := range st.Accounts {
+			if strings.EqualFold(a.RiotID, account) {
+				accts = []store.Account{a}
+			}
+		}
+		if accts == nil {
+			return nil, nil, nil, fmt.Errorf("--account %s isn't tracked (tracked: %s)", account, st.RiotIDs())
+		}
 	}
 	queues, err := c.queueList()
 	if err != nil {
-		return nil, st, nil, err
+		return nil, nil, nil, err
 	}
 	qset := map[int]bool{}
 	for _, q := range queues {
 		qset[q] = true
 	}
-	games, err := analysis.LoadGames(s, st.PUUID, qset)
-	return s, st, games, err
+	puuids := make([]string, len(accts))
+	for i, a := range accts {
+		puuids[i] = a.PUUID
+	}
+	games, err := analysis.LoadGames(s, puuids, qset)
+	return s, accts, games, err
 }
+
+const accountFlagHelp = "one account's games (Name#TAG), or all to combine every tracked account"
 
 func cmdReport(args []string) error {
 	fs := flag.NewFlagSet("report", flag.ExitOnError)
@@ -324,28 +393,43 @@ func cmdReport(args []string) error {
 	c.register(fs)
 	out := fs.String("out", "", "write to file instead of stdout")
 	minGames := fs.Int("min-games", 5, "hide champions with fewer games")
+	account := fs.String("account", "all", accountFlagHelp)
 	fs.Parse(args)
 
-	s, st, games, err := loadForAnalysis(c)
+	s, accts, games, err := loadForAnalysis(c, *account)
 	if err != nil {
 		return err
 	}
-	in := analysis.ReportInput{RiotID: st.RiotID, Games: games, MinGames: *minGames}
-	if raw, day, err := s.LatestRankSnapshot(); err == nil && raw != nil {
+	in := analysis.ReportInput{Games: games, MinGames: *minGames}
+	want := "RANKED_SOLO_5x5"
+	if c.queues == "flex" {
+		want = "RANKED_FLEX_SR"
+	}
+	var names, ranks []string
+	for _, a := range accts {
+		names = append(names, a.RiotID)
+		raw, day, err := s.LatestRankSnapshot(a.PUUID)
+		if err != nil || raw == nil {
+			continue
+		}
 		var entries []riot.LeagueEntry
-		if json.Unmarshal(raw, &entries) == nil {
-			want := "RANKED_SOLO_5x5"
-			if c.queues == "flex" {
-				want = "RANKED_FLEX_SR"
+		if json.Unmarshal(raw, &entries) != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.QueueType != want {
+				continue
 			}
-			for _, e := range entries {
-				if e.QueueType == want {
-					in.Rank = fmt.Sprintf("%s %s %d LP (%dW %dL)", e.Tier, e.Rank, e.LeaguePoints, e.Wins, e.Losses)
-					in.RankDate = day
-				}
+			r := fmt.Sprintf("%s %s %d LP (%dW %dL)", e.Tier, e.Rank, e.LeaguePoints, e.Wins, e.Losses)
+			if len(accts) > 1 {
+				r = a.RiotID + " " + r
 			}
+			ranks = append(ranks, r)
+			in.RankDate = max(in.RankDate, day)
 		}
 	}
+	in.RiotID = strings.Join(names, ", ")
+	in.Rank = strings.Join(ranks, "; ")
 
 	sum := analysis.Summarize(games, in.MinGames)
 	pm, err := poolMeta(c.data, sum)
@@ -393,9 +477,10 @@ func cmdExport(args []string) error {
 	var c common
 	c.register(fs)
 	out := fs.String("out", "", "write to file instead of stdout")
+	account := fs.String("account", "all", accountFlagHelp)
 	fs.Parse(args)
 
-	_, _, games, err := loadForAnalysis(c)
+	_, _, games, err := loadForAnalysis(c, *account)
 	if err != nil {
 		return err
 	}

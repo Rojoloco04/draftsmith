@@ -2,11 +2,11 @@
 //
 // Layout under the data dir:
 //
-//	state.json                  who we sync for and backfill progress
-//	matches/<matchId>.json.gz   raw match-v5 responses
+//	state.json                  the tracked accounts and their backfill progress
+//	matches/<matchId>.json.gz   raw match-v5 responses, for every account
 //	timelines/<matchId>.json.gz raw timeline responses
 //	timelines/<matchId>.missing marker for timelines Riot no longer has
-//	ranks/<date>.json           daily snapshot of league-v4 standings
+//	ranks/<puuid>/<date>.json   daily snapshot of an account's league-v4 standings
 //	meta/<key>.json             cached OP.GG responses
 //
 // Raw responses are kept untouched so new stats can be computed later
@@ -19,6 +19,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -31,7 +32,14 @@ type Store struct {
 	Dir string
 }
 
+// State lists the tracked accounts, in the order they were added. They
+// are all me: their games share one archive and one index.
 type State struct {
+	Accounts []Account `json:"accounts"`
+}
+
+// Account is one tracked Riot account.
+type Account struct {
 	PUUID    string `json:"puuid"`
 	RiotID   string `json:"riotId"`
 	Platform string `json:"platform"`
@@ -40,6 +48,52 @@ type State struct {
 	// of stopping at the first page of already-archived games.
 	BackfillDone map[int]bool `json:"backfillDone"`
 	LastSync     time.Time    `json:"lastSync"`
+}
+
+// PUUIDs lists the tracked accounts' PUUIDs.
+func (st State) PUUIDs() []string {
+	out := make([]string, len(st.Accounts))
+	for i, a := range st.Accounts {
+		out[i] = a.PUUID
+	}
+	return out
+}
+
+// RiotIDs names the tracked accounts, e.g. "A#NA1, B#SLU".
+func (st State) RiotIDs() string {
+	names := make([]string, len(st.Accounts))
+	for i, a := range st.Accounts {
+		names[i] = a.RiotID
+	}
+	return strings.Join(names, ", ")
+}
+
+// Find returns the account with this PUUID, or nil.
+func (st *State) Find(puuid string) *Account {
+	for i := range st.Accounts {
+		if st.Accounts[i].PUUID == puuid {
+			return &st.Accounts[i]
+		}
+	}
+	return nil
+}
+
+// LastSync is the most recent sync of any account.
+func (st State) LastSync() time.Time {
+	var t time.Time
+	for _, a := range st.Accounts {
+		if a.LastSync.After(t) {
+			t = a.LastSync
+		}
+	}
+	return t
+}
+
+// legacyState reads state.json from before multiple accounts too: one
+// account at the top level, its rank snapshots directly under ranks/.
+type legacyState struct {
+	Account
+	Accounts []Account `json:"accounts"`
 }
 
 func Open(dir string) (*Store, error) {
@@ -51,23 +105,58 @@ func Open(dir string) (*Store, error) {
 	return &Store{Dir: dir}, nil
 }
 
+// LoadState reads the tracked accounts. A single-account state.json from
+// before multiple accounts is migrated on the way: its account becomes the
+// first, and its rank snapshots move under ranks/<puuid>/.
 func (s *Store) LoadState() (State, error) {
 	var st State
 	b, err := os.ReadFile(filepath.Join(s.Dir, "state.json"))
 	if errors.Is(err, os.ErrNotExist) {
-		st.BackfillDone = map[int]bool{}
 		return st, nil
 	}
 	if err != nil {
 		return st, err
 	}
-	if err := json.Unmarshal(b, &st); err != nil {
+	var raw legacyState
+	if err := json.Unmarshal(b, &raw); err != nil {
 		return st, err
 	}
-	if st.BackfillDone == nil {
-		st.BackfillDone = map[int]bool{}
+	st.Accounts = raw.Accounts
+	if len(st.Accounts) == 0 && raw.PUUID != "" {
+		st.Accounts = []Account{raw.Account}
+		if err := s.migrateRanks(raw.PUUID); err != nil {
+			return st, fmt.Errorf("moving rank snapshots: %w", err)
+		}
+		if err := s.SaveState(st); err != nil {
+			return st, err
+		}
+	}
+	for i := range st.Accounts {
+		if st.Accounts[i].BackfillDone == nil {
+			st.Accounts[i].BackfillDone = map[int]bool{}
+		}
 	}
 	return st, nil
+}
+
+// migrateRanks moves rank snapshots from ranks/ into ranks/<puuid>/.
+func (s *Store) migrateRanks(puuid string) error {
+	entries, err := os.ReadDir(filepath.Join(s.Dir, "ranks"))
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(s.ranksDir(puuid), 0o755); err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		if err := os.Rename(filepath.Join(s.Dir, "ranks", e.Name()), filepath.Join(s.ranksDir(puuid), e.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) SaveState(st State) error {
@@ -133,30 +222,41 @@ func (s *Store) MatchIDs() ([]string, error) {
 	return ids, nil
 }
 
-// PutRankSnapshot stores today's standings, one file per day.
-func (s *Store) PutRankSnapshot(day time.Time, v any) error {
+func (s *Store) ranksDir(puuid string) string {
+	return filepath.Join(s.Dir, "ranks", safe(puuid))
+}
+
+// PutRankSnapshot stores an account's standings for a day, one file per
+// day.
+func (s *Store) PutRankSnapshot(puuid string, day time.Time, v any) error {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
-	return writeAtomic(filepath.Join(s.Dir, "ranks", day.Format("2006-01-02")+".json"), b)
+	if err := os.MkdirAll(s.ranksDir(puuid), 0o755); err != nil {
+		return err
+	}
+	return writeAtomic(filepath.Join(s.ranksDir(puuid), day.Format("2006-01-02")+".json"), b)
 }
 
-// LatestRankSnapshot returns the newest snapshot, or nil if none.
-func (s *Store) LatestRankSnapshot() ([]byte, string, error) {
-	days, err := s.RankSnapshotDays()
+// LatestRankSnapshot returns an account's newest snapshot, or nil if none.
+func (s *Store) LatestRankSnapshot(puuid string) ([]byte, string, error) {
+	days, err := s.RankSnapshotDays(puuid)
 	if err != nil || len(days) == 0 {
 		return nil, "", err
 	}
 	last := days[len(days)-1]
-	b, err := s.LoadRankSnapshot(last)
+	b, err := s.LoadRankSnapshot(puuid, last)
 	return b, last, err
 }
 
-// RankSnapshotDays lists the days (YYYY-MM-DD) with a rank snapshot, oldest
-// first.
-func (s *Store) RankSnapshotDays() ([]string, error) {
-	entries, err := os.ReadDir(filepath.Join(s.Dir, "ranks"))
+// RankSnapshotDays lists the days (YYYY-MM-DD) with a rank snapshot for an
+// account, oldest first.
+func (s *Store) RankSnapshotDays(puuid string) ([]string, error) {
+	entries, err := os.ReadDir(s.ranksDir(puuid))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -170,9 +270,9 @@ func (s *Store) RankSnapshotDays() ([]string, error) {
 	return days, nil
 }
 
-// LoadRankSnapshot reads the snapshot for day (YYYY-MM-DD).
-func (s *Store) LoadRankSnapshot(day string) ([]byte, error) {
-	return os.ReadFile(filepath.Join(s.Dir, "ranks", safe(day)+".json"))
+// LoadRankSnapshot reads an account's snapshot for day (YYYY-MM-DD).
+func (s *Store) LoadRankSnapshot(puuid, day string) ([]byte, error) {
+	return os.ReadFile(filepath.Join(s.ranksDir(puuid), safe(day)+".json"))
 }
 
 func (s *Store) MetaPath(key string) string {

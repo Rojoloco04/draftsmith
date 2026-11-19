@@ -11,7 +11,9 @@ import (
 
 // Game is one ranked game from the tracked player's point of view.
 type Game struct {
-	MatchID           string    `json:"matchId"`
+	MatchID string `json:"matchId"`
+	// Account is the PUUID of my account that played it. Not exported.
+	Account           string    `json:"-"`
 	Start             time.Time `json:"start"`
 	Patch             string    `json:"patch"`
 	Queue             int       `json:"queue"`
@@ -83,6 +85,7 @@ func Extract(m *riot.Match, tl *riot.Timeline, puuid string) (g Game, ok bool) {
 
 	g = Game{
 		MatchID:      m.Metadata.MatchID,
+		Account:      puuid,
 		Start:        time.UnixMilli(start),
 		Patch:        patch(m.Info.GameVersion),
 		Queue:        m.Info.QueueID,

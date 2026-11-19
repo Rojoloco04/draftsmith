@@ -142,7 +142,7 @@ func TestSyncReportExport(t *testing.T) {
 	}
 	d, _ = db.OpenDir(context.Background(), data)
 	defer d.Close()
-	hist, _ := d.RankHistory(context.Background(), "RANKED_SOLO_5x5")
+	hist, _ := d.RankHistory(context.Background(), fixture.MePUUID, "RANKED_SOLO_5x5")
 	games, _ = d.Games(context.Background(), db.GameFilter{})
 	if len(games) != n || len(hist) != 1 || hist[0].LP != 45 {
 		t.Fatalf("after reindex: %d games, rank history %+v", len(games), hist)
@@ -163,5 +163,113 @@ func TestCheckListenAddr(t *testing.T) {
 		if err := checkListenAddr(addr); (err == nil) != ok {
 			t.Errorf("%s: err = %v", addr, err)
 		}
+	}
+}
+
+// TestSyncTwoAccounts adds a second account to an archive and checks that
+// sync, the index and report keep them apart and together.
+func TestSyncTwoAccounts(t *testing.T) {
+	const alt = "alt-puuid"
+	spec := func(i int) fixture.Spec {
+		sp := fixture.Spec{
+			ID: fmt.Sprintf("NA1_%d", i), StartMs: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(i) * time.Hour).UnixMilli(),
+			Champion: "Ahri", Opponent: "Zed", Win: true,
+		}
+		if i > 100 {
+			sp.Champion, sp.Win, sp.PUUID = "Sylas", false, alt
+		}
+		return sp
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		switch {
+		case p == "/riot/account/v1/accounts/by-riot-id/Jack/NA1":
+			w.Write([]byte(`{"puuid":"` + fixture.MePUUID + `","gameName":"Jack","tagLine":"NA1"}`))
+		case p == "/riot/account/v1/accounts/by-riot-id/Jack/ALT":
+			w.Write([]byte(`{"puuid":"` + alt + `","gameName":"Jack","tagLine":"ALT"}`))
+		case p == "/lol/league/v4/entries/by-puuid/"+fixture.MePUUID:
+			w.Write([]byte(`[{"queueType":"RANKED_SOLO_5x5","tier":"EMERALD","rank":"II","leaguePoints":45,"wins":30,"losses":15}]`))
+		case p == "/lol/league/v4/entries/by-puuid/"+alt:
+			w.Write([]byte(`[{"queueType":"RANKED_SOLO_5x5","tier":"GOLD","rank":"I","leaguePoints":10,"wins":5,"losses":9}]`))
+		case strings.HasSuffix(p, "/ids"):
+			ids := []string{"NA1_5", "NA1_4", "NA1_3", "NA1_2", "NA1_1"}
+			if strings.Contains(p, alt) {
+				ids = []string{"NA1_103", "NA1_102", "NA1_101"}
+			}
+			if r.URL.Query().Get("start") != "0" {
+				ids = nil
+			}
+			json.NewEncoder(w).Encode(ids)
+		case strings.HasSuffix(p, "/timeline"):
+			i, _ := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(p, "/lol/match/v5/matches/NA1_"), "/timeline"))
+			w.Write(fixture.MustJSON(fixture.Timeline(spec(i))))
+		case strings.HasPrefix(p, "/lol/match/v5/matches/"):
+			i, _ := strconv.Atoi(strings.TrimPrefix(p, "/lol/match/v5/matches/NA1_"))
+			w.Write(fixture.MustJSON(fixture.Match(spec(i))))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	t.Setenv("RIOT_API_KEY", "RGAPI-test")
+	t.Setenv("DRAFTSMITH_RIOT_BASE_URL", srv.URL)
+	t.Setenv("DRAFTSMITH_RIOT_ID", "")
+	data := filepath.Join(dir, "data")
+	ctx := context.Background()
+
+	if err := cmdSync(ctx, []string{"--data", data, "--riot-id", "Jack#NA1", "--rate", "1000/1s"}); err != nil {
+		t.Fatal(err)
+	}
+	// Adding the second account syncs both, into one archive.
+	if err := cmdSync(ctx, []string{"--data", data, "--riot-id", "Jack#ALT", "--rate", "1000/1s"}); err != nil {
+		t.Fatal(err)
+	}
+	// A plain sync keeps every account up to date.
+	if err := cmdSync(ctx, []string{"--data", data, "--rate", "1000/1s"}); err != nil {
+		t.Fatal(err)
+	}
+
+	d, err := db.OpenDir(ctx, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	all, _ := d.Games(ctx, db.GameFilter{})
+	alts, _ := d.Games(ctx, db.GameFilter{Account: alt})
+	mine, _ := d.LatestRank(ctx, fixture.MePUUID, "RANKED_SOLO_5x5")
+	theirs, _ := d.LatestRank(ctx, alt, "RANKED_SOLO_5x5")
+	d.Close()
+	if len(all) != 8 || len(alts) != 3 {
+		t.Errorf("index: %d games, %d on the alt (want 8 and 3)", len(all), len(alts))
+	}
+	if mine == nil || mine.Tier != "EMERALD" || theirs == nil || theirs.Tier != "GOLD" {
+		t.Errorf("ranks: %+v and %+v", mine, theirs)
+	}
+
+	report := filepath.Join(dir, "report.md")
+	if err := cmdReport([]string{"--data", data, "--out", report}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(report)
+	for _, want := range []string{"# Ranked report: Jack#NA1, Jack#ALT", "8 games", "Jack#NA1 EMERALD II 45 LP", "Jack#ALT GOLD I 10 LP"} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("combined report missing %q\n%s", want, b)
+		}
+	}
+	if err := cmdReport([]string{"--data", data, "--out", report, "--account", "jack#alt", "--min-games", "1"}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ = os.ReadFile(report)
+	for _, want := range []string{"# Ranked report: Jack#ALT", "3 games", "GOLD I 10 LP", "Sylas"} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("alt report missing %q\n%s", want, b)
+		}
+	}
+	if strings.Contains(string(b), "Ahri") {
+		t.Errorf("alt report has the first account's games:\n%s", b)
+	}
+	if err := cmdReport([]string{"--data", data, "--out", report, "--account", "Nobody#NA1"}); err == nil {
+		t.Error("report for an untracked account should fail")
 	}
 }

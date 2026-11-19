@@ -31,6 +31,7 @@ type Spec struct {
 	EarlyDeathsEnemySide int  // deaths at minute 5.. on enemy half
 	Queue                int  // default solo queue
 	NoTimeline           bool // Archive stores no timeline for this game
+	PUUID                string // tracked player's PUUID, default MePUUID (another of my accounts)
 }
 
 func (s *Spec) defaults() {
@@ -42,6 +43,9 @@ func (s *Spec) defaults() {
 	}
 	if s.Queue == 0 {
 		s.Queue = riot.QueueSoloDuo
+	}
+	if s.PUUID == "" {
+		s.PUUID = MePUUID
 	}
 }
 
@@ -81,7 +85,7 @@ func Match(s Spec) riot.Match {
 				Item6:                       3340,
 			}
 			if team == 0 && pos == s.Position {
-				p.PUUID = MePUUID
+				p.PUUID = s.PUUID
 				p.ChampionName = s.Champion
 				p.Kills, p.Deaths, p.Assists = s.Kills, s.Deaths, s.Assists
 				p.TotalMinionsKilled = 200
@@ -116,7 +120,7 @@ func Timeline(s Spec) riot.Timeline {
 			ParticipantID int    `json:"participantId"`
 			PUUID         string `json:"puuid"`
 		}{p.ParticipantID, p.PUUID})
-		if p.PUUID == MePUUID {
+		if p.PUUID == s.PUUID {
 			me = p.ParticipantID
 		}
 	}

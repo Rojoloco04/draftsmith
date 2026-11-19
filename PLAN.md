@@ -43,10 +43,19 @@ The overlay is built (2026-11-18, see "Overlay" in the Phase 3 section): `serve 
 **Next up (asked by the user 2026-11-18, in this order):**
 
 1. ~~Summoner spell recommendations in champ select~~: done 2026-11-18, see "Spells and builds" in the Phase 3 section.
-2. Multiple accounts: track more than one Riot ID (first addition: `Rojoloco#SLU`). Today the archive, state, index and dashboard assume one PUUID.
+2. ~~Multiple accounts~~: done 2026-11-18, see "Multiple accounts" below. `Rojoloco#SLU` is not added yet: that needs `draftsmith sync --riot-id Rojoloco#SLU` with the new build, after stopping any `serve` still running the old one (an old binary rewriting `state.json` would drop the account list).
 3. Build recommendations in game. This relaxes the old "nothing during the game" rule; see the compliance rules.
 
 Team comp gaps (damage mix, frontline) are not in the score yet.
+
+Multiple accounts (2026-11-18):
+
+- One archive for every account: `state.json` is `{"accounts": [...]}`, each with its own PUUID, Riot ID, platform, backfill progress and last sync. Matches and timelines are shared (keyed by match id); rank snapshots live under `ranks/<puuid>/`. `LoadState` migrates the old single-account `state.json` (and moves `ranks/*.json` under the account) the first time the new build reads it. Checked on a copy of the real archive.
+- `sync --riot-id Name#TAG` adds an account (or renames one whose PUUID is already tracked); plain `sync` and `serve`'s background sync go through every account. Accounts on another platform than `--platform` are skipped with a note.
+- Index: `games.account` and `rank_snapshots.account` (PUUID), `SchemaVersion` 3. `Index` takes every PUUID; matches none of them played are retried each time, so adding an account indexes its games without a rebuild. Dropping one clears the index. `db.GameFilter.Account` filters ("" is all). `analysis.Game.Account` is `json:"-"`, so `export` doesn't write PUUIDs.
+- Dashboard: with 2+ accounts the header pill is a menu (All accounts, then each). The choice is a cookie (`account`, the Riot ID), so links don't change; `/account?id=...&back=...` sets it and only redirects to local paths. Every game query filters by it. In "All", the overview lists each account's rank and the rank chart has one line per account on a shared day axis.
+- `report` and `export` take `--account Name#TAG` (default `all`). Champ select suggestions use every account's solo queue games: it's the same player, and there are few games.
+- Decided without asking (the user can overrule): "All accounts" is the default view, and suggestions pool every account.
 
 Handoff notes (things a new session would otherwise rediscover):
 

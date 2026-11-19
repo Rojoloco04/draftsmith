@@ -116,6 +116,18 @@ svg.i { width: 18px; height: 18px; flex: none; }
 .who-text { display: flex; flex-direction: column; line-height: 1.15; }
 .who-text strong { font-size: .82rem; }
 .who-text .muted { font-size: .72rem; }
+/* With several accounts the pill opens a menu to switch between them. */
+.acct-menu { position: relative; }
+.acct-menu summary { list-style: none; cursor: pointer; }
+.acct-menu summary::-webkit-details-marker { display: none; }
+.acct-menu summary:hover { border-color: var(--line-strong); }
+.acct-menu .caret { width: 14px; height: 14px; color: var(--muted); margin-left: -2px; }
+.acct-menu[open] .caret { transform: rotate(180deg); }
+.acct-menu .menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; min-width: 220px; display: flex; flex-direction: column; padding: 6px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-hover); }
+.acct-menu .menu a { display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 8px; color: var(--text); font-weight: 600; font-size: .85rem; }
+.acct-menu .menu a:hover { background: var(--surface-2); text-decoration: none; }
+.acct-menu .menu a[aria-current] { background: var(--accent-soft); color: var(--accent); }
+.acct-menu .menu .muted { font-weight: 500; font-size: .78rem; }
 .sync { display: inline-flex; align-items: center; min-height: 34px; }
 .btn { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: .84rem; font-weight: 600; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 7px 12px; cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
 .btn svg.i { width: 15px; height: 15px; }
@@ -214,6 +226,10 @@ svg.ri { width: 16px; height: 16px; flex: none; color: var(--gold); vertical-ali
     linear-gradient(0deg, color-mix(in srgb, var(--surface) 70%, transparent), transparent 55%); }
 .hero-body { position: relative; display: flex; align-items: center; gap: 20px 28px; flex-wrap: wrap; padding: 24px 28px; min-height: 180px; }
 .hero-rank { display: flex; align-items: center; gap: 20px; flex: 1 1 340px; min-width: 0; }
+.acct-ranks { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.acct-rank { display: flex; align-items: center; gap: 12px; }
+.acct-rank .crest { width: 40px; height: 40px; flex: none; }
+.acct-rank p { margin: 0; }
 .emblem { position: relative; width: 132px; height: 112px; flex: none; }
 .emblem img { position: absolute; left: 50%; top: 50%; width: 560px; max-width: none; transform: translate(-50%, -47%); pointer-events: none; filter: drop-shadow(0 8px 18px rgba(0, 0, 0, .3)); }
 .emblem img[src$=".svg"] { width: 72px; transform: translate(-50%, -50%); filter: none; }

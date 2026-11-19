@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -19,29 +20,37 @@ import (
 type IndexResult struct {
 	Added   int // matches indexed for the first time
 	Updated int // matches reindexed because their timeline arrived later
-	Skipped int // archived matches the tracked player is not in
+	Skipped int // archived matches none of my accounts is in
 	Ranks   int // rank snapshot rows written
 }
 
-// Index brings the database up to date with the archive: it indexes every
-// archived match not yet in games, reindexes games whose timeline has been
-// archived since, and imports rank snapshots. It is cheap when nothing
-// changed. If puuid differs from the one the index was built for, the index
-// is cleared first.
-func (d *DB) Index(ctx context.Context, s *store.Store, puuid string) (IndexResult, error) {
+// Index brings the database up to date with the archive for my accounts
+// (PUUIDs): it indexes every archived match not yet in games, reindexes
+// games whose timeline has been archived since, and imports rank
+// snapshots. It is cheap when nothing changed. Matches skipped before are
+// tried again, so a newly added account's games come in on the next call.
+// If an account the index was built for is no longer listed, the index is
+// cleared first.
+func (d *DB) Index(ctx context.Context, s *store.Store, puuids []string) (IndexResult, error) {
 	var res IndexResult
-	if puuid == "" {
-		return res, errors.New("index: no tracked player")
+	if len(puuids) == 0 || slices.Contains(puuids, "") {
+		return res, errors.New("index: no tracked account")
 	}
-	prev, err := d.setting(ctx, "puuid")
+	prev, err := d.setting(ctx, "accounts")
 	if err != nil {
 		return res, err
 	}
-	if prev != puuid {
-		if err := d.clear(ctx); err != nil {
-			return res, err
+	now := strings.Join(puuids, "\n")
+	if prev != now {
+		for _, p := range strings.Split(prev, "\n") {
+			if p != "" && !slices.Contains(puuids, p) {
+				if err := d.clear(ctx); err != nil {
+					return res, err
+				}
+				break
+			}
 		}
-		if err := d.setSetting(ctx, "puuid", puuid); err != nil {
+		if err := d.setSetting(ctx, "accounts", now); err != nil {
 			return res, err
 		}
 	}
@@ -77,7 +86,7 @@ func (d *DB) Index(ctx context.Context, s *store.Store, puuid string) (IndexResu
 		if seen && (hasTL || !s.TimelineArchived(id)) {
 			continue
 		}
-		ok, err := d.indexMatch(ctx, s, id, puuid)
+		ok, err := d.indexMatch(ctx, s, id, puuids)
 		if err != nil {
 			return res, fmt.Errorf("indexing %s: %w", id, err)
 		}
@@ -91,17 +100,22 @@ func (d *DB) Index(ctx context.Context, s *store.Store, puuid string) (IndexResu
 		}
 	}
 
-	n, err := d.importRanks(ctx, s)
-	res.Ranks = n
-	return res, err
+	for _, p := range puuids {
+		n, err := d.importRanks(ctx, s, p)
+		res.Ranks += n
+		if err != nil {
+			return res, err
+		}
+	}
+	return res, nil
 }
 
 // Rebuild clears every derived table and indexes the whole archive again.
-func (d *DB) Rebuild(ctx context.Context, s *store.Store, puuid string) (IndexResult, error) {
+func (d *DB) Rebuild(ctx context.Context, s *store.Store, puuids []string) (IndexResult, error) {
 	if err := d.clear(ctx); err != nil {
 		return IndexResult{}, err
 	}
-	return d.Index(ctx, s, puuid)
+	return d.Index(ctx, s, puuids)
 }
 
 func (d *DB) clear(ctx context.Context) error {
@@ -118,8 +132,9 @@ func (d *DB) clear(ctx context.Context) error {
 	return tx.Commit()
 }
 
-// indexMatch (re)writes one match. ok is false if puuid is not in it.
-func (d *DB) indexMatch(ctx context.Context, s *store.Store, id, puuid string) (ok bool, err error) {
+// indexMatch (re)writes one match, from the point of view of whichever of
+// my accounts (puuids) played it. ok is false if none did.
+func (d *DB) indexMatch(ctx context.Context, s *store.Store, id string, puuids []string) (ok bool, err error) {
 	raw, err := s.LoadMatch(id)
 	if err != nil {
 		return false, err
@@ -137,7 +152,13 @@ func (d *DB) indexMatch(ctx context.Context, s *store.Store, id, puuid string) (
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return false, fmt.Errorf("timeline: %w", err)
 	}
-	g, ok := analysis.Extract(&m, tl, puuid)
+	var g analysis.Game
+	var puuid string
+	for _, puuid = range puuids {
+		if g, ok = analysis.Extract(&m, tl, puuid); ok {
+			break
+		}
+	}
 	if !ok {
 		return false, nil
 	}
@@ -189,7 +210,7 @@ func insertGame(ctx context.Context, tx *sql.Tx, g analysis.Game) error {
 		return []any{l.Gold, l.CS, l.XP, l.GoldDiff, l.CSDiff, l.XPDiff, l.HasOpp}
 	}
 	args := []any{
-		g.MatchID, g.Start.UnixMilli(), g.Patch, g.Queue, g.Remake, g.Minutes, g.Champion, g.Role, g.Opponent, g.Win,
+		g.MatchID, g.Account, g.Start.UnixMilli(), g.Patch, g.Queue, g.Remake, g.Minutes, g.Champion, g.Role, g.Opponent, g.Win,
 		g.Kills, g.Deaths, g.Assists, g.CS, g.CSPerMin, g.GoldPerMin, g.VisionPerMin, g.ControlWards,
 		g.KillParticipation, g.DamageShare, g.HasTimeline,
 	}
@@ -200,14 +221,15 @@ func insertGame(ctx context.Context, tx *sql.Tx, g analysis.Game) error {
 	return err
 }
 
-func (d *DB) importRanks(ctx context.Context, s *store.Store) (int, error) {
-	days, err := s.RankSnapshotDays()
+// importRanks loads one account's rank snapshots.
+func (d *DB) importRanks(ctx context.Context, s *store.Store, puuid string) (int, error) {
+	days, err := s.RankSnapshotDays(puuid)
 	if err != nil {
 		return 0, err
 	}
 	n := 0
 	for _, day := range days {
-		raw, err := s.LoadRankSnapshot(day)
+		raw, err := s.LoadRankSnapshot(puuid, day)
 		if err != nil {
 			return n, err
 		}
@@ -216,11 +238,11 @@ func (d *DB) importRanks(ctx context.Context, s *store.Store) (int, error) {
 			return n, fmt.Errorf("rank snapshot %s: %w", day, err)
 		}
 		for _, e := range entries {
-			if _, err := d.sql.ExecContext(ctx, `INSERT INTO rank_snapshots (day, queue, tier, division, lp, wins, losses)
-				VALUES (?, ?, ?, ?, ?, ?, ?)
-				ON CONFLICT (day, queue) DO UPDATE SET tier = excluded.tier, division = excluded.division,
+			if _, err := d.sql.ExecContext(ctx, `INSERT INTO rank_snapshots (account, day, queue, tier, division, lp, wins, losses)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+				ON CONFLICT (account, day, queue) DO UPDATE SET tier = excluded.tier, division = excluded.division,
 					lp = excluded.lp, wins = excluded.wins, losses = excluded.losses`,
-				day, e.QueueType, e.Tier, e.Rank, e.LeaguePoints, e.Wins, e.Losses); err != nil {
+				puuid, day, e.QueueType, e.Tier, e.Rank, e.LeaguePoints, e.Wins, e.Losses); err != nil {
 				return n, err
 			}
 			n++
@@ -229,7 +251,7 @@ func (d *DB) importRanks(ctx context.Context, s *store.Store) (int, error) {
 	return n, nil
 }
 
-const gameColumns = `match_id, start_ms, patch, queue, remake, minutes, champion, role, opponent, win,
+const gameColumns = `match_id, account, start_ms, patch, queue, remake, minutes, champion, role, opponent, win,
 	kills, deaths, assists, cs, cs_per_min, gold_per_min, vision_per_min, control_wards,
 	kill_participation, damage_share, has_timeline,
 	at10_gold, at10_cs, at10_xp, at10_gold_diff, at10_cs_diff, at10_xp_diff, at10_has_opp,

@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"math"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 
@@ -19,6 +20,7 @@ const pageSize = 20
 // loadSummary reads every game in the selected queue and summarizes them.
 func (s *Server) loadSummary(r *http.Request, f db.GameFilter) ([]analysis.Game, analysis.Summary, error) {
 	f.Queue = queueFrom(r).ID
+	f.Account = s.puuid(r)
 	games, err := s.db.Games(r.Context(), f)
 	if err != nil {
 		return nil, analysis.Summary{}, err
@@ -56,7 +58,10 @@ type overviewData struct {
 	Base
 	Sum       analysis.Summary
 	Patch     string
+	// Rank is the selected account's latest snapshot. With all accounts
+	// selected it's nil, and Ranks has each account's instead.
 	Rank      *db.RankSnapshot
+	Ranks     []acctRank
 	RankDays  int
 	RankFrom  string
 	LPChart   template.HTML
@@ -74,17 +79,31 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 	}
 	d := overviewData{Base: s.base(r, "Overview", "overview"), Sum: sum, Patch: latestPatch(sum)}
 
-	hist, err := s.db.RankHistory(r.Context(), rankQueue(d.Queue))
-	if err != nil {
-		s.fail(w, r, http.StatusInternalServerError, err)
-		return
+	accts := s.accounts
+	if d.Account != nil {
+		accts = []Account{*d.Account}
 	}
-	if len(hist) > 0 {
-		d.Rank = &hist[len(hist)-1]
-		d.RankDays = len(hist)
-		d.RankFrom = hist[0].Day
-		d.LPChart = lpChart(hist)
+	var hists []rankHist
+	for _, a := range accts {
+		hist, err := s.db.RankHistory(r.Context(), a.PUUID, rankQueue(d.Queue))
+		if err != nil {
+			s.fail(w, r, http.StatusInternalServerError, err)
+			return
+		}
+		if len(hist) == 0 {
+			continue
+		}
+		d.Ranks = append(d.Ranks, acctRank{a.RiotID, &hist[len(hist)-1], seriesClasses[len(hists)%len(seriesClasses)]})
+		hists = append(hists, rankHist{a.RiotID, hist})
+		d.RankDays = max(d.RankDays, len(hist))
+		if d.RankFrom == "" || hist[0].Day < d.RankFrom {
+			d.RankFrom = hist[0].Day
+		}
 	}
+	if d.Account != nil && len(d.Ranks) == 1 {
+		d.Rank, d.Ranks = d.Ranks[0].Rank, nil
+	}
+	d.LPChart = lpChart(hists)
 	d.WRChart = winRateChart(sum.Games)
 
 	d.TopChamps = champRows(sum.Games, sum.Base)
@@ -100,41 +119,82 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "overview", "", d)
 }
 
-func lpChart(hist []db.RankSnapshot) template.HTML {
-	s := Series{Name: "Rank", Class: "s1", Dots: true}
-	lo, hi := math.Inf(1), math.Inf(-1)
-	for i, h := range hist {
-		v := ladderPoints(h.Tier, h.Division, h.LP)
-		if math.IsNaN(v) {
-			continue
+// acctRank is one account's latest standing.
+type acctRank struct {
+	RiotID string
+	Rank   *db.RankSnapshot
+	Class  string // its line's color in the rank chart
+}
+
+// rankHist is one account's rank history.
+type rankHist struct {
+	RiotID string
+	Hist   []db.RankSnapshot
+}
+
+// seriesClasses color the accounts' lines in order (style.css).
+var seriesClasses = []string{"s1", "s3", "s2"}
+
+// lpChart draws each account's rank over the days any of them has a
+// snapshot for, one line per account.
+func lpChart(hists []rankHist) template.HTML {
+	var days []string
+	for _, h := range hists {
+		for _, s := range h.Hist {
+			days = append(days, s.Day)
 		}
-		lo, hi = math.Min(lo, v), math.Max(hi, v)
-		s.Points = append(s.Points, Point{X: float64(i), Y: v,
-			Label: fmt.Sprintf("%s: %s %s %d LP (%dW %dL)", h.Day, h.Tier, h.Division, h.LP, h.Wins, h.Losses)})
 	}
-	if len(s.Points) == 0 {
+	slices.Sort(days)
+	days = slices.Compact(days)
+	at := map[string]int{}
+	for i, d := range days {
+		at[d] = i
+	}
+
+	var series []Series
+	lo, hi := math.Inf(1), math.Inf(-1)
+	for i, h := range hists {
+		s := Series{Name: h.RiotID, Class: seriesClasses[i%len(seriesClasses)], Dots: true}
+		who := ""
+		if len(hists) > 1 {
+			who = h.RiotID + " "
+		}
+		for _, r := range h.Hist {
+			v := ladderPoints(r.Tier, r.Division, r.LP)
+			if math.IsNaN(v) {
+				continue
+			}
+			lo, hi = math.Min(lo, v), math.Max(hi, v)
+			s.Points = append(s.Points, Point{X: float64(at[r.Day]), Y: v,
+				Label: fmt.Sprintf("%s%s: %s %s %d LP (%dW %dL)", who, r.Day, r.Tier, r.Division, r.LP, r.Wins, r.Losses)})
+		}
+		if len(s.Points) > 0 {
+			series = append(series, s)
+		}
+	}
+	if len(series) == 0 {
 		return ""
 	}
 	// Show at least the surrounding division so one day isn't a flat line.
 	lo = math.Floor(lo/100) * 100
 	hi = math.Max(math.Ceil(hi/100)*100, lo+100)
 	var ticks []float64
-	if len(hist) > 1 {
-		ticks = []float64{0, float64(len(hist) - 1)}
+	if len(days) > 1 {
+		ticks = []float64{0, float64(len(days) - 1)}
 	} else {
 		ticks = []float64{0}
 	}
 	return LineChart{
 		Title:   "Rank history",
-		Series:  []Series{s},
+		Series:  series,
 		YRange:  &[2]float64{lo, hi},
 		YTicks:  int((hi - lo) / 100),
 		YFormat: ladderLabel,
 		XTicks:  ticks,
 		XFormat: func(x float64) string {
 			i := int(x)
-			if i >= 0 && i < len(hist) {
-				return hist[i].Day
+			if i >= 0 && i < len(days) {
+				return days[i]
 			}
 			return ""
 		},
@@ -219,7 +279,7 @@ func (s *Server) matches(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(q.Get("page"))
 	d.Page = max(page, 1)
 
-	all, err := s.db.Games(r.Context(), db.GameFilter{Queue: d.Queue.ID})
+	all, err := s.db.Games(r.Context(), db.GameFilter{Account: s.puuid(r), Queue: d.Queue.ID})
 	if err != nil {
 		s.fail(w, r, http.StatusInternalServerError, err)
 		return
@@ -233,7 +293,7 @@ func (s *Server) matches(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Slice(d.Champions, func(i, j int) bool { return champName(d.Champions[i]) < champName(d.Champions[j]) })
 
-	f := db.GameFilter{Queue: d.Queue.ID, Role: d.Role, Champion: d.Champion}
+	f := db.GameFilter{Account: s.puuid(r), Queue: d.Queue.ID, Role: d.Role, Champion: d.Champion}
 	games, total, err := s.db.GamePage(r.Context(), f, (d.Page-1)*pageSize, pageSize)
 	if err == nil {
 		d.Total = total

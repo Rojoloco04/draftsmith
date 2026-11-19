@@ -15,6 +15,8 @@ var ErrNotFound = errors.New("not found")
 
 // GameFilter selects games. Zero values match everything.
 type GameFilter struct {
+	// Account is one of my accounts' PUUID; "" means all of them.
+	Account  string
 	Queue    int
 	Role     string // Riot position, e.g. MIDDLE
 	Champion string
@@ -26,6 +28,10 @@ type GameFilter struct {
 func (f GameFilter) where() (string, []any) {
 	var conds []string
 	var args []any
+	if f.Account != "" {
+		conds = append(conds, "account = ?")
+		args = append(args, f.Account)
+	}
 	if f.Queue != 0 {
 		conds = append(conds, "queue = ?")
 		args = append(args, f.Queue)
@@ -146,7 +152,7 @@ func (d *DB) queryGames(ctx context.Context, query string, args ...any) ([]analy
 		var start int64
 		var at10, at15 laneCols
 		if err := rows.Scan(
-			&g.MatchID, &start, &g.Patch, &g.Queue, &g.Remake, &g.Minutes, &g.Champion, &g.Role, &g.Opponent, &g.Win,
+			&g.MatchID, &g.Account, &start, &g.Patch, &g.Queue, &g.Remake, &g.Minutes, &g.Champion, &g.Role, &g.Opponent, &g.Win,
 			&g.Kills, &g.Deaths, &g.Assists, &g.CS, &g.CSPerMin, &g.GoldPerMin, &g.VisionPerMin, &g.ControlWards,
 			&g.KillParticipation, &g.DamageShare, &g.HasTimeline,
 			&at10.gold, &at10.cs, &at10.xp, &at10.goldDiff, &at10.csDiff, &at10.xpDiff, &at10.hasOpp,
@@ -190,10 +196,11 @@ type RankSnapshot struct {
 	Losses   int
 }
 
-// RankHistory returns the daily snapshots for a queue, oldest first.
-func (d *DB) RankHistory(ctx context.Context, queue string) ([]RankSnapshot, error) {
+// RankHistory returns an account's daily snapshots for a queue, oldest
+// first.
+func (d *DB) RankHistory(ctx context.Context, account, queue string) ([]RankSnapshot, error) {
 	rows, err := d.sql.QueryContext(ctx, `SELECT day, queue, tier, division, lp, wins, losses
-		FROM rank_snapshots WHERE queue = ? ORDER BY day`, queue)
+		FROM rank_snapshots WHERE account = ? AND queue = ? ORDER BY day`, account, queue)
 	if err != nil {
 		return nil, err
 	}
@@ -209,12 +216,12 @@ func (d *DB) RankHistory(ctx context.Context, queue string) ([]RankSnapshot, err
 	return out, rows.Err()
 }
 
-// LatestRank returns the newest snapshot for a queue, or nil if there is
-// none.
-func (d *DB) LatestRank(ctx context.Context, queue string) (*RankSnapshot, error) {
+// LatestRank returns an account's newest snapshot for a queue, or nil if
+// there is none.
+func (d *DB) LatestRank(ctx context.Context, account, queue string) (*RankSnapshot, error) {
 	var r RankSnapshot
 	err := d.sql.QueryRowContext(ctx, `SELECT day, queue, tier, division, lp, wins, losses
-		FROM rank_snapshots WHERE queue = ? ORDER BY day DESC LIMIT 1`, queue).
+		FROM rank_snapshots WHERE account = ? AND queue = ? ORDER BY day DESC LIMIT 1`, account, queue).
 		Scan(&r.Day, &r.Queue, &r.Tier, &r.Division, &r.LP, &r.Wins, &r.Losses)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil

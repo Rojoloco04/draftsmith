@@ -19,7 +19,7 @@ import (
 // SchemaVersion is stored in PRAGMA user_version. Bump it whenever the
 // schema or the derived values change; Open then drops and recreates every
 // table and the next Index rebuilds them from the archive.
-const SchemaVersion = 2
+const SchemaVersion = 3 // 3: games and rank snapshots per account
 
 // FileName is the database file inside the data directory.
 const FileName = "draftsmith.db"
@@ -40,6 +40,7 @@ CREATE TABLE settings (
 
 CREATE TABLE games (
 	match_id           TEXT PRIMARY KEY,
+	account            TEXT NOT NULL, -- PUUID of my account in the game
 	start_ms           INTEGER NOT NULL,
 	patch              TEXT NOT NULL,
 	queue              INTEGER NOT NULL,
@@ -121,6 +122,7 @@ CREATE TABLE frames (
 );
 
 CREATE TABLE rank_snapshots (
+	account  TEXT NOT NULL, -- PUUID
 	day      TEXT NOT NULL, -- YYYY-MM-DD
 	queue    TEXT NOT NULL, -- RANKED_SOLO_5x5, RANKED_FLEX_SR
 	tier     TEXT NOT NULL,
@@ -128,7 +130,7 @@ CREATE TABLE rank_snapshots (
 	lp       INTEGER NOT NULL,
 	wins     INTEGER NOT NULL,
 	losses   INTEGER NOT NULL,
-	PRIMARY KEY (day, queue)
+	PRIMARY KEY (account, day, queue)
 );
 
 -- OP.GG responses (filled in Phase 2).
