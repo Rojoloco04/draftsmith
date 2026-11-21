@@ -434,3 +434,65 @@ func TestTwoAccounts(t *testing.T) {
 		t.Errorf("dropped account's rank is still indexed: %+v", r)
 	}
 }
+
+func TestDeaths(t *testing.T) {
+	ctx := context.Background()
+	d, s := setup(t)
+	if _, err := d.Index(ctx, s, me); err != nil {
+		t.Fatal(err)
+	}
+	games, err := d.Games(ctx, GameFilter{NoRemakes: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]analysis.Game{}
+	n := 0
+	for _, g := range games {
+		full, _, err := d.Match(ctx, g.MatchID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want[g.MatchID] = full
+		n += len(full.DeathSpots)
+	}
+	got, err := d.Deaths(ctx, GameFilter{NoRemakes: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != n || n == 0 {
+		t.Fatalf("got %d deaths, want %d", len(got), n)
+	}
+	seen := map[string]int{}
+	for _, dt := range got {
+		g, ok := want[dt.MatchID]
+		if !ok {
+			t.Fatalf("death in unexpected game %s", dt.MatchID)
+		}
+		w := g.DeathSpots[seen[dt.MatchID]]
+		seen[dt.MatchID]++
+		if dt.Minute != w.Minute || dt.X != w.X || dt.Y != w.Y || dt.Win != g.Win {
+			t.Errorf("%s: got %+v, want %+v win=%v", dt.MatchID, dt, w, g.Win)
+		}
+	}
+	m, _ := fixture.Real()
+	for _, p := range m.Info.Participants {
+		if p.PUUID == fixture.MePUUID {
+			blue := p.TeamID == 100
+			for _, dt := range got {
+				if dt.MatchID == fixture.RealMatchID && dt.Blue != blue {
+					t.Errorf("real game side: got blue=%v, want %v", dt.Blue, blue)
+				}
+			}
+		}
+	}
+
+	flex, err := d.Deaths(ctx, GameFilter{Queue: riot.QueueFlex})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dt := range flex {
+		if dt.MatchID != "NA1_111" {
+			t.Errorf("queue filter let %s through", dt.MatchID)
+		}
+	}
+}

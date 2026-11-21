@@ -140,6 +140,41 @@ func (d *DB) Match(ctx context.Context, id string) (analysis.Game, analysis.Deta
 	return g, det, rows.Err()
 }
 
+// DeathSpot is one of my deaths, with the game's result and my side.
+type DeathSpot struct {
+	MatchID string
+	Minute  float64
+	X, Y    int
+	Win     bool
+	Blue    bool // my team was 100 (blue, base bottom left)
+}
+
+// Deaths returns my deaths in matching games, oldest game first. Games
+// without a timeline have none.
+func (d *DB) Deaths(ctx context.Context, f GameFilter) ([]DeathSpot, error) {
+	where, args := f.where()
+	rows, err := d.sql.QueryContext(ctx, `SELECT g.match_id, dt.minute, dt.x, dt.y, g.win, coalesce(p.team_id, 100)
+		FROM (SELECT match_id, start_ms, win FROM games`+where+`) g
+		JOIN deaths dt ON dt.match_id = g.match_id
+		LEFT JOIN participants p ON p.match_id = g.match_id AND p.me = 1
+		ORDER BY g.start_ms, g.match_id, dt.seq`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []DeathSpot
+	for rows.Next() {
+		var s DeathSpot
+		var team int
+		if err := rows.Scan(&s.MatchID, &s.Minute, &s.X, &s.Y, &s.Win, &team); err != nil {
+			return nil, err
+		}
+		s.Blue = team != 200
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
 func (d *DB) queryGames(ctx context.Context, query string, args ...any) ([]analysis.Game, error) {
 	rows, err := d.sql.QueryContext(ctx, query, args...)
 	if err != nil {

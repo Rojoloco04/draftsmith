@@ -7,6 +7,18 @@
 {{if not .Rows}}
 <p class="card empty">No games indexed for {{.Queue.Label}}.</p>
 {{else}}
+<section class="card">
+  <h2>Roles</h2>
+  <div class="bars">
+  {{range .Sum.Roles}}
+    <div class="bar-row">
+      <span class="bar-label">{{template "role" .Key}}{{.Key}}</span>
+      <span class="bar"><span style="width: {{widthPct .Games $.RoleMax}}"></span></span>
+      <span class="bar-val"><strong>{{.Games}}</strong> <span class="{{if ge .Games 5}}{{wrClass .WinRate}}{{end}}">{{pct .WinRate}}</span></span>
+    </div>
+  {{end}}
+  </div>
+</section>
 {{if .Fits}}
 <section class="card">
   <h2>Your pool vs the meta</h2>

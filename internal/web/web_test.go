@@ -114,13 +114,19 @@ func TestOverview(t *testing.T) {
 	}
 	expect(t, body,
 		"Tester#NA1", "Emerald III", "12 LP", "Rank history", // LP chart
-		"Rolling win rate", "Top champions", "Wukong", // display name for MonkeyKing
-		"What stands out", `data-nav="overview" aria-current="page"`, "Last sync 5 minutes ago",
-		`class="streak"`, "Gold lead at 15",
+		`data-nav="overview" aria-current="page"`, "Last sync 5 minutes ago",
+		`class="hexstrip"`, `href="/matches/NA1_1027"`, // recent matches
+		"Where you die", `class="heat"`, `class="hex"`, "Danger zones", // death heatmap
+		"Champion pool", `class="pool"`, "Wukong", `href="/champions/MonkeyKing?queue=solo"`, // pool plot, display name for MonkeyKing
+		"Gold lead at 15",
 		"ranked-emblem/emblem-emerald.png", "ranked-mini-crests/emerald.svg", // rank icons
-		`href="#r-mid"`,         // role glyph
-		"/img/champion/splash/", // hero art
+		"/img/champion/splash/", // banner art
 	)
+	for _, gone := range []string{"What stands out", "Top champions", "Recent form", "Roles"} {
+		if strings.Contains(body, gone) {
+			t.Errorf("overview still shows %q", gone)
+		}
+	}
 	// Solo queue only by default: 28 synthetic solo games + the real one.
 	if !strings.Contains(body, "<strong>29</strong>") {
 		t.Error("overview should count 29 solo games")
@@ -205,7 +211,8 @@ func TestChampions(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("status %d", code)
 	}
-	expect(t, body, "Ahri", "Syndra", "Wukong", "Vladimir", `sort=adj" aria-current="true"`)
+	expect(t, body, "Ahri", "Syndra", "Wukong", "Vladimir", `sort=adj" aria-current="true"`,
+		"Roles", `href="#r-mid"`) // roles card with its glyph
 
 	code, body = get(t, ts, "/champions/MonkeyKing")
 	if code != 200 {

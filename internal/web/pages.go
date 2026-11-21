@@ -60,17 +60,20 @@ type overviewData struct {
 	Patch string
 	// Rank is the selected account's latest snapshot. With all accounts
 	// selected it's nil, and Ranks has each account's instead.
-	Rank      *db.RankSnapshot
-	Ranks     []acctRank
-	RankDays  int
-	RankFrom  string
-	LPChart   template.HTML
-	WRChart   template.HTML
-	TopChamps []analysis.Group
-	Recent    []analysis.Game
-	RoleMax   int
-	Proto     bool // PROTOTYPE: show the variant switcher
+	Rank     *db.RankSnapshot
+	Ranks    []acctRank
+	RankDays int
+	RankFrom string
+	LPChart  template.HTML
+	// Splash is the most played champion, for the banner's art.
+	Splash string
+	Recent []analysis.Game
+	Deaths deathHeat
+	Pool   template.HTML
 }
+
+// recentGames is how many games the overview's strip shows.
+const recentGames = 20
 
 func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 	_, sum, err := s.loadSummary(r, db.GameFilter{})
@@ -105,24 +108,21 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 		d.Rank, d.Ranks = d.Ranks[0].Rank, nil
 	}
 	d.LPChart = lpChart(hists)
-	d.WRChart = winRateChart(sum.Games)
 
-	d.TopChamps = champRows(sum.Games, sum.Base)
-	if len(d.TopChamps) > 6 {
-		d.TopChamps = d.TopChamps[:6]
+	champs := champRows(sum.Games, sum.Base)
+	if len(champs) > 0 {
+		d.Splash = champs[0].Key
 	}
-	for i := len(sum.Games) - 1; i >= 0 && len(d.Recent) < 10; i-- {
+	d.Pool = poolPlot(champs, sum.Base, d.Patch, d.Queue.Key)
+	for i := len(sum.Games) - 1; i >= 0 && len(d.Recent) < recentGames; i-- {
 		d.Recent = append(d.Recent, sum.Games[i])
 	}
-	for _, g := range sum.Roles {
-		d.RoleMax = max(d.RoleMax, g.Games)
-	}
-	// PROTOTYPE: ?variant= switches to the redesign prototypes.
-	if v := protoVariant(r); v != "" && v != "0" && len(sum.Games) > 0 {
-		s.protoOverview(w, r, d, v)
+	spots, err := s.db.Deaths(r.Context(), db.GameFilter{Queue: d.Queue.ID, Account: s.puuid(r), NoRemakes: true})
+	if err != nil {
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
-	d.Proto = protoVariant(r) != ""
+	d.Deaths = newDeathHeat(spots, 5)
 	s.render(w, r, "overview", "", d)
 }
 
@@ -439,6 +439,8 @@ type championsData struct {
 	FitBy   map[string]meta.Fit
 	Meta    meta.TierList
 	MetaErr error
+	// RoleMax is the most games in one role, for the roles card's bars.
+	RoleMax int
 }
 
 var champSorts = map[string]func(a, b analysis.Group) bool{
@@ -470,6 +472,9 @@ func (s *Server) champions(w http.ResponseWriter, r *http.Request) {
 		d.Sort, less = "games", champSorts["games"]
 	}
 	d.Rows = champRows(sum.Games, sum.Base)
+	for _, g := range sum.Roles {
+		d.RoleMax = max(d.RoleMax, g.Games)
+	}
 	sort.SliceStable(d.Rows, func(i, j int) bool { return less(d.Rows[i], d.Rows[j]) })
 	var fits []meta.Fit
 	fits, d.Meta, d.MetaErr = s.poolFit(r, sum)

@@ -230,33 +230,104 @@ svg.ri { width: 16px; height: 16px; flex: none; color: var(--gold); vertical-ali
     linear-gradient(90deg, var(--surface) 18%, color-mix(in srgb, var(--surface) 55%, transparent) 55%, color-mix(in srgb, var(--surface) 15%, transparent)),
     linear-gradient(0deg, color-mix(in srgb, var(--surface) 70%, transparent), transparent 55%); }
 .hero-body { position: relative; display: flex; align-items: center; gap: 20px 28px; flex-wrap: wrap; padding: 24px 28px; min-height: 180px; }
-.hero-rank { display: flex; align-items: center; gap: 20px; flex: 1 1 340px; min-width: 0; }
-.acct-ranks { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.acct-ranks { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .acct-rank { display: flex; align-items: center; gap: 12px; }
-.acct-rank .crest { width: 40px; height: 40px; flex: none; }
-.acct-rank p { margin: 0; }
-.emblem { position: relative; width: 132px; height: 112px; flex: none; }
-.emblem img { position: absolute; left: 50%; top: 50%; width: 560px; max-width: none; transform: translate(-50%, -47%); pointer-events: none; filter: drop-shadow(0 8px 18px rgba(0, 0, 0, .3)); }
-.emblem img[src$=".svg"] { width: 72px; transform: translate(-50%, -50%); filter: none; }
-.rank-name { font-size: 2rem; font-weight: 780; letter-spacing: -.03em; margin: 2px 0 4px; }
-.rank-line { font-size: .95rem; margin-bottom: 2px; }
-.hero-form { display: flex; flex-direction: column; gap: 10px; margin-left: auto; }
-@media (max-width: 720px) {
-  .hero-body { padding: 18px; }
-  .hero-form { margin-left: 0; }
-  .emblem { width: 96px; height: 84px; }
-  .emblem img { width: 410px; }
-  .rank-name { font-size: 1.55rem; }
-}
+.acct-rank .crest { width: 44px; height: 44px; flex: none; }
+.acct-rank p { margin: 4px 0 0; }
+.acct-tier { font-size: 1.15rem; font-weight: 750; }
+@media (max-width: 720px) { .hero-body { padding: 18px; } }
 
-/* Recent form: champion icons ringed by result */
-.streak { display: flex; gap: 8px; flex-wrap: wrap; padding-bottom: 6px; }
-.streak a { position: relative; display: inline-flex; border-radius: 12px; transition: transform .15s; }
-.streak a:hover { transform: translateY(-2px); text-decoration: none; }
-.streak .icon { width: 40px; height: 40px; border-radius: 12px; box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--loss); }
-.streak .w .icon { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--win); }
-.streak b { position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%); font-size: .58rem; font-weight: 800; line-height: 1; padding: 2px 4px; border-radius: 4px; color: #fff; background: var(--loss); }
-.streak .w b { background: var(--win); }
+/* Overview banner: rank, LP bar and headline numbers over splash art */
+.banner { position: relative; isolation: isolate; overflow: hidden; display: flex; align-items: center; gap: 24px 32px; flex-wrap: wrap;
+  padding: 26px 32px; margin-bottom: 10px; border-radius: var(--radius); background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--gold) 55%, var(--line));
+  box-shadow: inset 0 0 0 4px var(--surface), inset 0 0 0 5px color-mix(in srgb, var(--gold) 30%, transparent), var(--shadow); }
+.banner-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 60% 22%; z-index: -2; opacity: var(--hero-splash); }
+.banner::after { content: ""; position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(90deg, var(--surface) 22%, color-mix(in srgb, var(--surface) 55%, transparent) 60%, color-mix(in srgb, var(--surface) 20%, transparent)); }
+.banner-rank { display: flex; align-items: center; gap: 22px; flex: 1 1 360px; min-width: 0; }
+.banner-emblem { position: relative; width: 140px; height: 120px; flex: none; }
+.banner-emblem img { position: absolute; left: 50%; top: 50%; width: 600px; max-width: none; transform: translate(-50%, -47%); pointer-events: none;
+  filter: drop-shadow(0 0 22px color-mix(in srgb, var(--gold) 35%, transparent)); }
+.banner-emblem img[src$=".svg"] { width: 76px; transform: translate(-50%, -50%); filter: none; }
+.eyebrow { display: block; font-size: .72rem; font-weight: 650; letter-spacing: .24em; text-transform: uppercase; color: var(--muted); }
+.banner-title { font-size: clamp(1.8rem, 4vw, 2.7rem); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; margin: 4px 0 10px; line-height: 1.05;
+  background: linear-gradient(180deg, var(--text), color-mix(in srgb, var(--gold) 75%, var(--text))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.banner-sub { margin: 8px 0 2px; }
+.lpbar { display: block; height: 6px; max-width: 340px; background: var(--surface-3); border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--line)); }
+.lpbar > span { display: block; height: 100%; background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 60%, transparent), var(--accent));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent); }
+.lpbar.sm { height: 4px; max-width: 220px; margin-top: 5px; }
+.gems { display: flex; gap: 14px 18px; flex-wrap: wrap; margin-left: auto; }
+.gem { text-align: center; width: 76px; }
+.gem strong { position: relative; isolation: isolate; display: grid; place-items: center; width: 72px; height: 72px; margin: 0 auto 6px; font-size: .95rem; font-weight: 750;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); background: color-mix(in srgb, var(--gold) 70%, var(--line)); }
+.gem strong::before { content: ""; position: absolute; inset: 1.5px; z-index: -1; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: linear-gradient(135deg, var(--surface-3), var(--surface)); }
+.gem span { font-size: .62rem; font-weight: 650; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+@media (max-width: 720px) {
+  .banner { padding: 20px; }
+  .banner-emblem { width: 96px; height: 84px; }
+  .banner-emblem img { width: 410px; }
+  .gems { margin-left: 0; gap: 10px; }
+  .gem { width: 60px; }
+  .gem strong { width: 58px; height: 58px; font-size: .82rem; }
+}
+.pagehead.end { justify-content: flex-end; }
+
+/* Recent matches: hexagon portraits framed by result */
+.hexstrip { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 12px 8px; }
+@media (max-width: 1000px) { .hexstrip { grid-template-columns: repeat(10, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .hexstrip { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.hexm { display: grid; justify-items: center; gap: 4px; color: var(--muted); }
+.hexm:hover { text-decoration: none; }
+.hexm-frame { display: block; width: 100%; max-width: 56px; aspect-ratio: 54 / 62; padding: 2px; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: linear-gradient(var(--loss), color-mix(in srgb, var(--loss) 35%, var(--surface))); transition: transform .15s; }
+.hexm.w .hexm-frame { background: linear-gradient(color-mix(in srgb, var(--gold) 60%, #fff), var(--gold)); }
+.hexm:hover .hexm-frame { transform: translateY(-2px); }
+.hexm-img { position: relative; display: grid; place-items: center; width: 100%; height: 100%; overflow: hidden; background: var(--surface-3);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+.hexm-img::before { content: attr(data-initials); font-size: .7rem; font-weight: 700; color: var(--muted); }
+.hexm-img img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scale(1.14); }
+.hexm.l img { filter: grayscale(.6) brightness(.8); }
+.hexm b { font-size: .7rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.hexm.w b { color: var(--text); }
+
+/* Death heatmap: hex bins on a line drawing of the Rift, one per phase */
+.heat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-bottom: 6px; }
+@media (max-width: 720px) { .heat-grid { grid-template-columns: 1fr; } }
+.heat-map { margin: 0; }
+.heat-map figcaption { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line-strong); font-size: .85rem; }
+svg.heat { display: block; width: 100%; height: auto; }
+.heat .h-edge { fill: var(--surface-2); stroke: var(--line-strong); stroke-width: 1.2; }
+.heat .h-river { stroke: var(--accent); stroke-opacity: .16; stroke-width: 14; }
+.heat .h-lane { fill: none; stroke: var(--line-strong); stroke-width: 7; stroke-linecap: round; stroke-opacity: .7; }
+.heat .h-base { fill: var(--loss); opacity: .08; }
+.heat .h-base.own { fill: var(--win); opacity: .12; }
+.heat .hex { fill: var(--loss); stroke: var(--surface); stroke-width: 1; }
+.heat .hex:hover { stroke: var(--text); stroke-width: 1.5; }
+.heat .hex-n { fill: #fff; font-size: 8px; font-weight: 750; text-anchor: middle; pointer-events: none; }
+.zones { list-style: none; counter-reset: z; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+.zones li { counter-increment: z; display: grid; grid-template-columns: 26px 1fr; column-gap: 8px; padding: 9px 12px; border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--loss-soft), transparent 80%); border-left: 3px solid var(--loss); }
+.zones li::before { content: counter(z, upper-roman); grid-row: span 2; align-self: center; font-weight: 800; color: var(--gold); }
+.zones li span { font-size: .78rem; }
+
+/* Champion pool plot */
+svg.pool { display: block; width: 100%; height: auto; overflow: visible; }
+.pool .q-good { fill: var(--win); opacity: .06; }
+.pool .q-label { font-size: 14px; font-style: italic; fill: var(--muted); }
+.pool .ref { stroke: var(--muted); stroke-dasharray: 3 4; opacity: .7; }
+.pool .axis { font-size: 11px; fill: var(--muted); }
+.pool .axis.title { letter-spacing: .1em; text-transform: uppercase; }
+.pool .pp-ring { fill: var(--muted); }
+.pool .pp.up .pp-ring { fill: var(--win); }
+.pool .pp:hover .pp-ring, .pool .pp:focus .pp-ring { fill: var(--text); }
+
+/* Hover details for [data-tip] (app.js) */
+.tip { position: fixed; z-index: 100; pointer-events: none; max-width: 280px; padding: 8px 11px; border-radius: 9px; white-space: pre-line;
+  background: var(--surface); color: var(--text); border: 1px solid var(--line-strong); box-shadow: var(--shadow-hover); font-size: .8rem; line-height: 1.45; }
+.tip::first-line { font-weight: 700; }
 
 /* Tables */
 .scroll { overflow-x: auto; }

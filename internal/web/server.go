@@ -79,7 +79,7 @@ func New(d *db.DB, accounts []Account, logger *log.Logger) (*Server, error) {
 	}
 	s := &Server{db: d, accounts: accounts, log: logger, pages: map[string]*template.Template{}}
 	for _, p := range []string{"overview", "matches", "match", "champions", "champion", "tierlist", "champselect", "error"} {
-		t, err := template.New(p).Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/parts.html", "templates/prototype_switch.html", "templates/"+p+".html")
+		t, err := template.New(p).Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/parts.html", "templates/"+p+".html")
 		if err != nil {
 			return nil, fmt.Errorf("template %s: %w", p, err)
 		}
@@ -91,12 +91,6 @@ func New(d *db.DB, accounts []Account, logger *log.Logger) (*Server, error) {
 		return nil, fmt.Errorf("template overlay: %w", err)
 	}
 	s.pages["overlay"] = t
-	// PROTOTYPE: overview redesign variants.
-	t, err = template.New("proto_overview").Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/parts.html", "templates/prototype_switch.html", "templates/prototype_overview.html")
-	if err != nil {
-		return nil, fmt.Errorf("template proto_overview: %w", err)
-	}
-	s.pages["proto_overview"] = t
 	return s, nil
 }
 

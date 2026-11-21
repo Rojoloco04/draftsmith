@@ -47,7 +47,7 @@ draftsmith serve --no-overlay              # champ select page only, no window b
 draftsmith reindex                         # rebuild data/draftsmith.db from the archive
 ```
 
-Pages: an overview (rank and LP history, rolling win rate, top champions, roles, gold lead at 15 vs result, notes), match history with role and champion filters, a match page (both teams' stats, your gold and CS against your lane opponent, where you died), per-champion stats with matchups, and an OP.GG tier list.
+Pages: an overview (rank banner with headline numbers, your last 20 games, where you die on the Rift by game phase with the worst zones, your champion pool plotted by games and adjusted win rate, rank history, and gold lead at 15 vs result), match history with role and champion filters, a match page (both teams' stats, your gold and CS against your lane opponent, where you died), per-champion stats with matchups and your roles, and an OP.GG tier list.
 
 Background sync checks for new games every 25 minutes. To pick up a game you just finished, press **Refresh** in the header: it syncs right away and reloads the page when it's done.
 

@@ -1,60 +1,89 @@
 {{define "content"}}
-{{if .Proto}}{{template "protoSwitch" dict "Variant" "0" "Queue" .Queue.Key}}{{end}}
+{{if not .Sum.Games}}
 <div class="pagehead">
   <h1>Overview</h1>
   {{template "queueSwitch" .Base}}
 </div>
-
-{{if not .Sum.Games}}
 <section class="card empty">
   <h2>No games yet</h2>
   <p>Nothing is indexed for {{.Queue.Label}}. Run <code>draftsmith sync</code>, or wait for the background sync.</p>
 </section>
 {{else}}
-<section class="hero">
-  {{with .TopChamps}}<img class="splash" src="{{splashImg (index . 0).Key}}" alt="">{{end}}
-  <div class="hero-body">
-    <div class="hero-rank">
-      {{with .Rank}}
-        <span class="emblem"><img src="{{rankEmblem .Tier}}" alt="{{rankLabel .Tier .Division}} emblem"></span>
-        <div>
-          <span class="label">{{$.Queue.Label}}</span>
-          <h2 class="rank-name">{{rankLabel .Tier .Division}}</h2>
-          <p class="rank-line"><strong>{{.LP}} LP</strong> <span class="muted">· {{.Wins}}W {{.Losses}}L · {{pct (recordPct .Wins .Losses)}} this split</span></p>
-          <p class="muted small">{{$.RiotID}} · as of {{.Day}}</p>
-        </div>
-      {{else}}{{if .Ranks}}
-        <div class="acct-ranks">
-          <span class="label">{{$.Queue.Label}} · {{len $.Accounts}} accounts</span>
-          {{range .Ranks}}{{$a := .RiotID}}{{with .Rank}}
-          <div class="acct-rank">
-            <img class="crest" src="{{rankCrest .Tier}}" alt="" width="40" height="40">
-            <div>
-              <strong>{{rankLabel .Tier .Division}}</strong> <span class="muted">{{.LP}} LP · {{.Wins}}W {{.Losses}}L</span>
-              <p class="muted small">{{$a}} · as of {{.Day}}</p>
-            </div>
-          </div>
-          {{end}}{{end}}
-        </div>
-      {{else}}
-        <span class="emblem"><img src="{{rankEmblem ""}}" alt=""></span>
-        <div>
-          <span class="label">{{$.Queue.Label}}</span>
-          <h2 class="rank-name">Unranked</h2>
-          <p class="muted small">No rank snapshot yet. Each sync records today's standing.</p>
-        </div>
-      {{end}}{{end}}
-    </div>
-    <div class="hero-form">
-      <span class="label">Last {{len .Recent}} games</span>
-      <div class="streak" aria-label="Last 10 games, newest first">
-        {{range .Recent}}<a href="/matches/{{path .MatchID}}" class="{{if .Win}}w{{else}}l{{end}}" title="{{champ .Champion}} {{if .Win}}win{{else}}loss{{end}}, {{.Start.Format "Jan 2"}}"><span class="icon" data-initials="{{initials .Champion}}"><img src="{{champImg .Champion .Patch}}" alt="" loading="lazy" width="36" height="36"></span><b>{{if .Win}}W{{else}}L{{end}}</b></a>{{end}}
+<section class="banner">
+  {{with .Splash}}<img class="banner-art" src="{{splashImg .}}" alt="">{{end}}
+  <div class="banner-rank">
+    {{with .Rank}}
+      <span class="banner-emblem"><img src="{{rankEmblem .Tier}}" alt="{{rankLabel .Tier .Division}} emblem"></span>
+      <div>
+        <span class="eyebrow">{{$.Queue.Label}}</span>
+        <h1 class="banner-title">{{rankLabel .Tier .Division}}</h1>
+        <span class="lpbar" title="{{.LP}} LP"><span style="width: {{lpWidth .LP}}"></span></span>
+        <p class="banner-sub"><strong>{{.LP}} LP</strong> · {{.Wins}}W {{.Losses}}L · {{pct (recordPct .Wins .Losses)}} this split</p>
+        <p class="muted small">{{$.RiotID}} · as of {{.Day}}</p>
       </div>
-    </div>
+    {{else}}{{if .Ranks}}
+      <div class="acct-ranks">
+        <span class="eyebrow">{{$.Queue.Label}} · {{len $.Accounts}} accounts</span>
+        {{range .Ranks}}{{$a := .RiotID}}{{with .Rank}}
+        <div class="acct-rank">
+          <img class="crest" src="{{rankCrest .Tier}}" alt="" width="44" height="44">
+          <div>
+            <strong class="acct-tier">{{rankLabel .Tier .Division}}</strong>
+            <span class="lpbar sm" title="{{.LP}} LP"><span style="width: {{lpWidth .LP}}"></span></span>
+            <p class="muted small">{{.LP}} LP · {{.Wins}}W {{.Losses}}L · {{$a}} · as of {{.Day}}</p>
+          </div>
+        </div>
+        {{end}}{{end}}
+      </div>
+    {{else}}
+      <span class="banner-emblem"><img src="{{rankEmblem ""}}" alt=""></span>
+      <div>
+        <span class="eyebrow">{{$.Queue.Label}}</span>
+        <h1 class="banner-title">Unranked</h1>
+        <p class="muted small">No rank snapshot yet. Each sync records today's standing.</p>
+      </div>
+    {{end}}{{end}}
+  </div>
+  {{with .Sum.Overall}}
+  <div class="gems">
+    <div class="gem"><strong>{{.Games}}</strong><span>Games</span></div>
+    <div class="gem"><strong class="{{if ge .Games 5}}{{wrClass .WinRate}}{{end}}">{{pct .WinRate}}</strong><span>Win rate</span></div>
+    <div class="gem"><strong>{{num .KDA 2}}</strong><span>KDA</span></div>
+    <div class="gem"><strong>{{num .CSPerMin 1}}</strong><span>CS/min</span></div>
+    <div class="gem"><strong class="{{diffClass .GoldDiff15}}">{{signed .GoldDiff15 0}}</strong><span>Gold @15</span></div>
+  </div>
+  {{end}}
+</section>
+<div class="pagehead sub end">{{template "queueSwitch" .Base}}</div>
+
+<section class="card">
+  <div class="card-head"><h2>Recent matches</h2><a class="more" href="/matches?queue={{.Queue.Key}}">All matches<svg class="i"><use href="#i-arrow"/></svg></a></div>
+  <div class="hexstrip" aria-label="Last {{len .Recent}} games, newest first">
+    {{range .Recent}}<a href="/matches/{{path .MatchID}}" class="hexm {{if .Win}}w{{else}}l{{end}}" data-tip="{{champ .Champion}}, {{if .Win}}win{{else}}loss{{end}}&#10;{{kda .Kills .Deaths .Assists}} · {{.Start.Format "Jan 2"}}" aria-label="{{champ .Champion}} {{if .Win}}win{{else}}loss{{end}}"><span class="hexm-frame"><span class="hexm-img" data-initials="{{initials .Champion}}"><img src="{{champImg .Champion .Patch}}" alt="" loading="lazy"></span></span><b>{{.Kills}}/{{.Deaths}}/{{.Assists}}</b></a>{{end}}
   </div>
 </section>
 
-{{template "tiles" .Sum.Overall}}
+<section class="card">
+  <h2>Where you die</h2>
+  {{if .Deaths.Total}}
+  <p class="note top">{{.Deaths.Total}} deaths from games with a timeline, split by game time. Red side games are turned around so your base is always bottom left. Darker hexes hold more deaths; hover one for the count.</p>
+  <div class="heat-grid">
+    {{range .Deaths.Maps}}<figure class="heat-map">{{.SVG}}<figcaption><strong>{{.Name}}</strong> <span class="muted">{{.Span}} · {{plural .Deaths "death"}}</span></figcaption></figure>{{end}}
+  </div>
+  <h3>Danger zones</h3>
+  <ol class="zones">
+    {{range .Deaths.Zones}}<li><strong>{{.Name}}</strong><span class="muted">{{plural .Deaths "death"}} · {{pct .LossShare}} in losses · avg {{clock .AvgMinute}}</span></li>{{end}}
+  </ol>
+  {{else}}
+  <p class="muted">No death positions yet. They come from match timelines, which Riot keeps for about a year.</p>
+  {{end}}
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>Champion pool</h2><a class="more" href="/champions?queue={{.Queue.Key}}">All champions<svg class="i"><use href="#i-arrow"/></svg></a></div>
+  <p class="note top">Across: games played. Up: adjusted win rate, (wins + 10 × {{pct .Sum.Base}}) ÷ (games + 10), so a 2-0 doesn't read as a sure thing. Hover a champion for its numbers.</p>
+  {{.Pool}}
+</section>
 
 <div class="grid two">
   <section class="card">
@@ -69,50 +98,7 @@
   </section>
 
   <section class="card">
-    <h2>Recent form</h2>
-    {{if .WRChart}}
-      <div class="legend"><span class="key s1"></span>Last 20 <span class="key s2"></span>Last 10 <span class="key ref"></span>50%</div>
-      {{.WRChart}}
-    {{else}}
-      <p class="muted">The rolling win rate needs at least 10 games.</p>
-    {{end}}
-  </section>
-</div>
-
-<div class="grid two">
-  <section class="card">
-    <div class="card-head"><h2>Top champions</h2><a class="more" href="/champions?queue={{.Queue.Key}}">All champions<svg class="i"><use href="#i-arrow"/></svg></a></div>
-    <div class="scroll">
-    <table class="tbl">
-      <thead><tr><th>Champion</th><th class="r">Games</th><th class="r" title="Win rate blended with 10 games at your overall win rate">Adj. WR</th><th class="r">KDA</th><th class="r">CS/m</th></tr></thead>
-      <tbody>
-      {{range .TopChamps}}
-        <tr>
-          <td><a class="champ" href="/champions/{{path .Key}}?queue={{$.Queue.Key}}"><span class="icon" data-initials="{{initials .Key}}"><img src="{{champImg .Key $.Patch}}" alt="" loading="lazy" width="32" height="32"></span>{{champ .Key}}</a></td>
-          <td class="r"><strong>{{.Games}}</strong> <span class="muted">{{.Wins}}-{{.Losses}}</span></td>
-          <td class="r {{if ge .Games 5}}{{wrClass .Adjusted}}{{end}}">{{pct .Adjusted}}</td>
-          <td class="r">{{num .KDA 2}}</td>
-          <td class="r">{{num .CSPerMin 1}}</td>
-        </tr>
-      {{end}}
-      </tbody>
-    </table>
-    </div>
-    <p class="note">Overall win rate {{pct .Sum.Base}}. Small samples are pulled toward it.</p>
-  </section>
-
-  <section class="card">
-    <h2>Roles</h2>
-    <div class="bars">
-    {{range .Sum.Roles}}
-      <div class="bar-row">
-        <span class="bar-label">{{template "role" .Key}}{{.Key}}</span>
-        <span class="bar"><span style="width: {{widthPct .Games $.RoleMax}}"></span></span>
-        <span class="bar-val"><strong>{{.Games}}</strong> <span class="{{wrClass .WinRate}}">{{pct .WinRate}}</span></span>
-      </div>
-    {{end}}
-    </div>
-    <h3>Gold lead at 15 vs result</h3>
+    <h2>Gold lead at 15 vs result</h2>
     <div class="bars">
     {{range .Sum.Buckets}}
       <div class="bar-row" title="{{.Games}} games">
@@ -124,15 +110,5 @@
     </div>
   </section>
 </div>
-
-<section class="card">
-  <h2>What stands out</h2>
-  {{if .Sum.Notes}}
-    <ul class="notes">{{range .Sum.Notes}}<li>{{.}}</li>{{end}}</ul>
-  {{else}}
-    <p class="muted">Nothing clear yet. More games, or games with timelines, will help.</p>
-  {{end}}
-  <p class="note">{{len .Sum.Games}} games ({{.Sum.Remakes}} remakes left out, {{.Sum.Timelines}} with timelines). These compare you with yourself; elo benchmarks come with <code>sample</code> in Phase 4.</p>
-</section>
 {{end}}
 {{end}}

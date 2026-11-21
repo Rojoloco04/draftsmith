@@ -4,13 +4,54 @@
 document.addEventListener("error", function (e) {
   var el = e.target;
   if (el && el.tagName === "IMG") {
-    if (el.parentElement && el.parentElement.classList.contains("icon")) {
+    if (el.parentElement && (el.parentElement.classList.contains("icon") || el.parentElement.hasAttribute("data-initials"))) {
       el.remove();
     } else {
       el.style.visibility = "hidden";
     }
   }
 }, true);
+
+// Hover details: anything with data-tip shows it in a small card that
+// follows the pointer (first line bold, one line per newline). Keyboard
+// focus shows it too.
+(function () {
+  var tip = null, cur = null;
+  function place(x, y) {
+    var r = tip.getBoundingClientRect();
+    var left = x + 14, top = y + 16;
+    if (left + r.width > innerWidth - 8) left = x - r.width - 14;
+    if (top + r.height > innerHeight - 8) top = y - r.height - 14;
+    tip.style.left = Math.max(8, left) + "px";
+    tip.style.top = Math.max(8, top) + "px";
+  }
+  function show(el, x, y) {
+    if (!tip) {
+      tip = document.createElement("div");
+      tip.className = "tip";
+      tip.setAttribute("role", "tooltip");
+      document.body.appendChild(tip);
+    }
+    cur = el;
+    tip.textContent = el.getAttribute("data-tip");
+    tip.hidden = false;
+    place(x, y);
+  }
+  function hide() { if (tip) tip.hidden = true; cur = null; }
+  document.addEventListener("mousemove", function (e) {
+    var el = e.target.closest && e.target.closest("[data-tip]");
+    if (!el) { if (cur) hide(); return; }
+    if (el !== cur) show(el, e.clientX, e.clientY); else place(e.clientX, e.clientY);
+  });
+  document.addEventListener("focusin", function (e) {
+    var el = e.target.closest && e.target.closest("[data-tip]");
+    if (!el) return;
+    var r = el.getBoundingClientRect();
+    show(el, r.right, r.bottom);
+  });
+  document.addEventListener("focusout", hide);
+  document.addEventListener("scroll", hide, true);
+})();
 
 // The overlay window docked by serve binds draftsmithHide, which hides it
 // until the next champ select. In a browser there's nothing to hide.
