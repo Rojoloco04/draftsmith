@@ -25,6 +25,12 @@ type PlayerLine struct {
 	// Spells are the two summoner spell ids (0 if unknown).
 	Spells [2]int `json:"spells"`
 	Runes  Runes  `json:"runes"`
+	// OPScore (0-10), OPRank (1-10, 1 is best) and Award (AwardMVP,
+	// AwardSVP or "") rate the player against the lobby; see ScorePlayers.
+	// Zero for remakes.
+	OPScore float64 `json:"opScore"`
+	OPRank  int     `json:"opRank"`
+	Award   string  `json:"award,omitempty"`
 }
 
 // Runes is a rune page as ids. Zero values mean unknown.
@@ -110,6 +116,11 @@ func ExtractDetail(m *riot.Match, tl *riot.Timeline, puuid string) (d Detail, ok
 			Runes:         RunesOf(p),
 		})
 	}
+	secs := m.Info.GameDuration
+	if secs > 100000 { // pre 11.20 matches reported milliseconds
+		secs /= 1000
+	}
+	ScorePlayers(d.Players, float64(secs)/60, secs < 300 || me.GameEndedInEarlySurrender)
 	if tl == nil {
 		return d, true
 	}

@@ -39,6 +39,9 @@ type LineChart struct {
 	XFormat func(float64) string
 	XTicks  []float64 // nil picks about five ticks
 	YTicks  int       // number of y ticks, default 4
+	// Width is the drawing's width in user units (default chartW); the
+	// height is always chartH, so a wider chart is flatter on the page.
+	Width int
 }
 
 const (
@@ -120,13 +123,17 @@ func (c LineChart) SVG() template.HTML {
 		widest = max(widest, len([]rune(labels[i])))
 	}
 	padL := math.Max(28, 10*float64(widest)+12)
-	plotW := chartW - padL - padR
+	w := c.Width
+	if w <= 0 {
+		w = chartW
+	}
+	plotW := float64(w) - padL - padR
 	sx := func(x float64) float64 { return padL + (x-xmin)/(xmax-xmin)*plotW }
 	sy := func(y float64) float64 { return padT + (1-(y-ymin)/(ymax-ymin))*plotH }
 
 	var b strings.Builder
-	fmt.Fprintf(&b, `<svg class="chart" viewBox="0 0 %d %d" role="img" aria-label="%s">`,
-		chartW, chartH, html.EscapeString(c.Title))
+	fmt.Fprintf(&b, `<svg class="chart" viewBox="0 0 %d %d" style="aspect-ratio: %d / %d" role="img" aria-label="%s">`,
+		w, chartH, w, chartH, html.EscapeString(c.Title))
 
 	// Grid and y labels.
 	for i, label := range labels {

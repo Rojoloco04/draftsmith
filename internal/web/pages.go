@@ -68,7 +68,6 @@ type overviewData struct {
 	// Splash is the most played champion, for the banner's art.
 	Splash string
 	Recent []analysis.Game
-	Deaths deathHeat
 	Pool   template.HTML
 }
 
@@ -117,12 +116,6 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 	for i := len(sum.Games) - 1; i >= 0 && len(d.Recent) < recentGames; i-- {
 		d.Recent = append(d.Recent, sum.Games[i])
 	}
-	spots, err := s.db.Deaths(r.Context(), db.GameFilter{Queue: d.Queue.ID, Account: s.puuid(r), NoRemakes: true})
-	if err != nil {
-		s.fail(w, r, http.StatusInternalServerError, err)
-		return
-	}
-	d.Deaths = newDeathHeat(spots, 5)
 	s.render(w, r, "overview", "", d)
 }
 
@@ -193,6 +186,7 @@ func lpChart(hists []rankHist) template.HTML {
 	}
 	return LineChart{
 		Title:   "Rank history",
+		Width:   1160, // full width on the overview
 		Series:  series,
 		YRange:  &[2]float64{lo, hi},
 		YTicks:  int((hi - lo) / 100),

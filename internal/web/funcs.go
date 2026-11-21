@@ -115,13 +115,23 @@ var funcs = template.FuncMap{
 		}
 		return fmt.Sprintf("%.1f%%", 100*float64(v)/float64(max))
 	},
-	"plural": plural,
 	// lpWidth is LP as a bar width, full at 100 (Master+ can go past).
 	"lpWidth": func(lp int) string { return fmt.Sprintf("%d%%", max(0, min(lp, 100))) },
-	// clock formats game minutes as m:ss.
-	"clock": func(min float64) string {
-		secs := int(math.Round(min * 60))
-		return fmt.Sprintf("%d:%02d", secs/60, secs%60)
+	"lower": strings.ToLower,
+	// ordinal is 1st, 2nd, 3rd, 4th... (places in a lobby of ten).
+	"ordinal": func(n int) string {
+		suffix := "th"
+		if n%100 < 11 || n%100 > 13 {
+			switch n % 10 {
+			case 1:
+				suffix = "st"
+			case 2:
+				suffix = "nd"
+			case 3:
+				suffix = "rd"
+			}
+		}
+		return fmt.Sprintf("%d%s", n, suffix)
 	},
 	"add":  func(a, b int) int { return a + b },
 	"sub":  func(a, b int) int { return a - b },

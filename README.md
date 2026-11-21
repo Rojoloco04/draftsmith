@@ -47,7 +47,9 @@ draftsmith serve --no-overlay              # champ select page only, no window b
 draftsmith reindex                         # rebuild data/draftsmith.db from the archive
 ```
 
-Pages: an overview (rank banner with headline numbers, your last 20 games, where you die on the Rift by game phase with the worst zones, your champion pool plotted by games and adjusted win rate, rank history, and gold lead at 15 vs result), match history with role and champion filters, a match page (both teams' stats, your gold and CS against your lane opponent, where you died), per-champion stats with matchups and your roles, and an OP.GG tier list.
+Pages: an overview (rank banner with headline numbers, rank history, your last 20 games, and your champion pool plotted by games and adjusted win rate), match history with role and champion filters, a match page (both teams' stats with an OP score for every player, your gold and CS against your lane opponent, where you died), per-champion stats with matchups and your roles, and an OP.GG tier list.
+
+The **OP score** rates every player in a match from 0 to 10 against the other nine: KDA, kill participation, damage share, gold per minute, gold lead over the lane opponent, CS per minute, vision per minute and deaths per minute, each compared with the lobby and weighted by role (supports aren't judged on CS), plus a small bump for the winning team. The best player on the winning team is the **MVP** and the best on the losing team the **SVP**. Match history shows yours next to the champion; the match page shows all ten.
 
 Background sync checks for new games every 25 minutes. To pick up a game you just finished, press **Refresh** in the header: it syncs right away and reloads the page when it's done.
 

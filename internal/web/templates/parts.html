@@ -53,6 +53,10 @@
 </div>
 {{end}}
 
+{{/* A player's OP score: MVP/SVP badge or place in the lobby, then the
+     score. Takes an analysis.PlayerLine with OPRank set. */}}
+{{define "opScore"}}<span class="op" data-tip="OP score {{num .OPScore 1}}, {{ordinal .OPRank}} of 10&#10;{{if eq .Award "MVP"}}Best on the winning team{{else if eq .Award "SVP"}}Best on the losing team{{else}}Rated on KDA, kill share, damage, gold, lane gold, CS and vision{{end}}"><b class="opb{{if .Award}} {{lower .Award}}{{end}}">{{if .Award}}{{.Award}}{{else}}{{ordinal .OPRank}}{{end}}</b><span class="op-score">{{num .OPScore 1}}</span></span>{{end}}
+
 {{define "matchRow"}}
 <a class="mrow {{if .Remake}}remake{{else if .Win}}win{{else}}loss{{end}}" href="/matches/{{path .MatchID}}">
   <div class="m-result">
@@ -69,6 +73,7 @@
     {{if .HasLine}}{{template "loadout" (dict "Line" .Line "Patch" .Patch)}}{{end}}
     <div class="m-name"><strong>{{champ .Champion}}</strong><span class="muted role-line">{{template "role" .Role}}{{role .Role}}</span></div>
   </div>
+  <div class="m-op">{{if and .HasLine .Line.OPRank}}{{template "opScore" .Line}}{{end}}</div>
   <div class="m-kda">
     <strong>{{.Kills}} <i>/</i> <span class="neg">{{.Deaths}}</span> <i>/</i> {{.Assists}}</strong>
     <span class="muted">{{kda .Kills .Deaths .Assists}} KDA</span>

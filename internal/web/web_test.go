@@ -116,13 +116,11 @@ func TestOverview(t *testing.T) {
 		"Tester#NA1", "Emerald III", "12 LP", "Rank history", // LP chart
 		`data-nav="overview" aria-current="page"`, "Last sync 5 minutes ago",
 		`class="hexstrip"`, `href="/matches/NA1_1027"`, // recent matches
-		"Where you die", `class="heat"`, `class="hex"`, "Danger zones", // death heatmap
 		"Champion pool", `class="pool"`, "Wukong", `href="/champions/MonkeyKing?queue=solo"`, // pool plot, display name for MonkeyKing
-		"Gold lead at 15",
 		"ranked-emblem/emblem-emerald.png", "ranked-mini-crests/emerald.svg", // rank icons
 		"/img/champion/splash/", // banner art
 	)
-	for _, gone := range []string{"What stands out", "Top champions", "Recent form", "Roles"} {
+	for _, gone := range []string{"What stands out", "Top champions", "Recent form", "Roles", "Where you die", "Gold lead at 15"} {
 		if strings.Contains(body, gone) {
 			t.Errorf("overview still shows %q", gone)
 		}
@@ -146,6 +144,10 @@ func TestMatchesAndFilters(t *testing.T) {
 	expect(t, body, "<!doctype html>", "29 games · page 1 of 2", "Older →", `href="/matches/NA1_1027"`, "Vladimir")
 	if n := strings.Count(body, `class="mrow`); n != pageSize {
 		t.Errorf("%d rows on page 1", n)
+	}
+	// Every non-remake row carries my OP score.
+	if n := strings.Count(body, `<span class="op" data-tip="OP score`); n != pageSize {
+		t.Errorf("%d rows with an OP score on page 1", n)
 	}
 
 	_, body = get(t, ts, "/matches?queue=solo&page=2")
@@ -181,6 +183,13 @@ func TestMatchDetail(t *testing.T) {
 		"/img/spell/SummonerHaste.png", "/img/spell/SummonerFlash.png", "StormraidersSurgeRuneIcon2.png",
 		"perk-images/Styles/7201_Precision.png", "StatModsCDRScalingIcon.png",
 	)
+	// OP score for all ten players: one MVP and one SVP.
+	if n := strings.Count(body, `<span class="op" data-tip`); n != 10 {
+		t.Errorf("%d players with an OP score", n)
+	}
+	if strings.Count(body, `class="opb mvp">MVP<`) != 1 || strings.Count(body, `class="opb svp">SVP<`) != 1 {
+		t.Error("want exactly one MVP and one SVP")
+	}
 	if n := strings.Count(body, "<tr class=\"me\">"); n != 1 {
 		t.Errorf("%d rows marked as me", n)
 	}

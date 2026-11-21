@@ -57,26 +57,21 @@
 <div class="pagehead sub end">{{template "queueSwitch" .Base}}</div>
 
 <section class="card">
+  <h2>Rank history</h2>
+  {{if .LPChart}}
+    {{if .Ranks}}<div class="legend">{{range $i, $r := .Ranks}}<span class="key {{$r.Class}}"></span>{{$r.RiotID}} {{end}}</div>{{end}}
+    {{.LPChart}}
+    {{if lt .RankDays 7}}<p class="note">Riot only exposes the current standing, so history starts with the first snapshot ({{.RankFrom}}) and grows by one point per day of syncing.</p>{{end}}
+  {{else}}
+    <p class="muted">No rank snapshot yet. Each sync records today's standing.</p>
+  {{end}}
+</section>
+
+<section class="card">
   <div class="card-head"><h2>Recent matches</h2><a class="more" href="/matches?queue={{.Queue.Key}}">All matches<svg class="i"><use href="#i-arrow"/></svg></a></div>
   <div class="hexstrip" aria-label="Last {{len .Recent}} games, newest first">
     {{range .Recent}}<a href="/matches/{{path .MatchID}}" class="hexm {{if .Win}}w{{else}}l{{end}}" data-tip="{{champ .Champion}}, {{if .Win}}win{{else}}loss{{end}}&#10;{{kda .Kills .Deaths .Assists}} · {{.Start.Format "Jan 2"}}" aria-label="{{champ .Champion}} {{if .Win}}win{{else}}loss{{end}}"><span class="hexm-frame"><span class="hexm-img" data-initials="{{initials .Champion}}"><img src="{{champImg .Champion .Patch}}" alt="" loading="lazy"></span></span><b>{{.Kills}}/{{.Deaths}}/{{.Assists}}</b></a>{{end}}
   </div>
-</section>
-
-<section class="card">
-  <h2>Where you die</h2>
-  {{if .Deaths.Total}}
-  <p class="note top">{{.Deaths.Total}} deaths from games with a timeline, split by game time. Red side games are turned around so your base is always bottom left. Darker hexes hold more deaths; hover one for the count.</p>
-  <div class="heat-grid">
-    {{range .Deaths.Maps}}<figure class="heat-map">{{.SVG}}<figcaption><strong>{{.Name}}</strong> <span class="muted">{{.Span}} · {{plural .Deaths "death"}}</span></figcaption></figure>{{end}}
-  </div>
-  <h3>Danger zones</h3>
-  <ol class="zones">
-    {{range .Deaths.Zones}}<li><strong>{{.Name}}</strong><span class="muted">{{plural .Deaths "death"}} · {{pct .LossShare}} in losses · avg {{clock .AvgMinute}}</span></li>{{end}}
-  </ol>
-  {{else}}
-  <p class="muted">No death positions yet. They come from match timelines, which Riot keeps for about a year.</p>
-  {{end}}
 </section>
 
 <section class="card">
@@ -85,30 +80,5 @@
   {{.Pool}}
 </section>
 
-<div class="grid two">
-  <section class="card">
-    <h2>Rank history</h2>
-    {{if .LPChart}}
-      {{if .Ranks}}<div class="legend">{{range $i, $r := .Ranks}}<span class="key {{$r.Class}}"></span>{{$r.RiotID}} {{end}}</div>{{end}}
-      {{.LPChart}}
-      {{if lt .RankDays 7}}<p class="note">Riot only exposes the current standing, so history starts with the first snapshot ({{.RankFrom}}) and grows by one point per day of syncing.</p>{{end}}
-    {{else}}
-      <p class="muted">No rank snapshot yet.</p>
-    {{end}}
-  </section>
-
-  <section class="card">
-    <h2>Gold lead at 15 vs result</h2>
-    <div class="bars">
-    {{range .Sum.Buckets}}
-      <div class="bar-row" title="{{.Games}} games">
-        <span class="bar-label">{{.Label}}</span>
-        <span class="bar wr"><span style="width: {{pctBar .WinRate}}"></span></span>
-        <span class="bar-val">{{pct .WinRate}} <span class="muted">({{.Games}})</span></span>
-      </div>
-    {{end}}
-    </div>
-  </section>
-</div>
 {{end}}
 {{end}}
