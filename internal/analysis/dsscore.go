@@ -17,14 +17,14 @@ import (
 type dsStat int
 
 const (
-	dsKDA        dsStat = iota // log(1 + (kills + assists) / max(1, deaths))
-	dsKP                       // kill participation
-	dsDamage                   // share of the team's champion damage
-	dsGold                     // gold per minute
-	dsLaneGold                 // gold lead over the lane opponent per minute
-	dsCS                       // CS per minute
-	dsVision                   // vision score per minute
-	dsDeaths                   // deaths per minute (weighted negative)
+	dsKDA      dsStat = iota // log(1 + (kills + assists) / max(1, deaths))
+	dsKP                     // kill participation
+	dsDamage                 // share of the team's champion damage
+	dsGold                   // gold per minute
+	dsLaneGold               // gold lead over the lane opponent per minute
+	dsCS                     // CS per minute
+	dsVision                 // vision score per minute
+	dsDeaths                 // deaths per minute (weighted negative)
 	dsStatCount
 )
 

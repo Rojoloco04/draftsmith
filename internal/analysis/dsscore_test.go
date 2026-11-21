@@ -26,8 +26,8 @@ func lobby() []PlayerLine {
 func TestScorePlayersAwards(t *testing.T) {
 	ps := lobby()
 	ps[2].Kills, ps[2].Deaths, ps[2].Damage, ps[2].Gold = 14, 1, 40000, 16000 // blue mid pops off
-	ps[8].Kills, ps[8].Deaths, ps[8].Damage = 10, 2, 32000                     // red bot does well in a loss
-	ps[5].Kills, ps[5].Deaths, ps[5].Assists = 0, 11, 1                        // red top has a rough game
+	ps[8].Kills, ps[8].Deaths, ps[8].Damage = 10, 2, 32000                    // red bot does well in a loss
+	ps[5].Kills, ps[5].Deaths, ps[5].Assists = 0, 11, 1                       // red top has a rough game
 	ScorePlayers(ps, 30, false)
 
 	if ps[2].DSRank != 1 || ps[2].Award != AwardMVP {
