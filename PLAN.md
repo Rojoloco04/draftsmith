@@ -44,6 +44,8 @@ The overlay is built (2026-11-18, see "Overlay" in the Phase 3 section): `serve 
 
 One command (2026-11-20, asked by the user): `draftsmith` with no arguments (or a double-click on the exe) runs `serve --open` from the exe's folder when `.env` isn't in the current one, and on an error waits for Enter so the console can be read. `serve` now watches the client and docks the overlay by default; `--no-watch` and `--no-overlay` turn them off (`--watch` and `--overlay` are gone). `--open` opens the dashboard in the browser.
 
+Icon (2026-11-20): `cmd/draftsmith/winres/icon.ico` is the dashboard logo drawn by `mkicon.go` (`go:build ignore`; it draws `icon.svg`'s shapes directly, no rasterizer needed). The user's desktop shortcut `Draftsmith.lnk` uses it. The exe itself has no embedded icon yet: that needs a `.syso` resource, e.g. from `go-winres`, which hasn't been approved to run here.
+
 Earlier (asked by the user 2026-11-18, in this order):
 
 1. ~~Summoner spell recommendations in champ select~~: done 2026-11-18, see "Spells and builds" in the Phase 3 section.

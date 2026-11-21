@@ -34,7 +34,7 @@ Flags worth knowing:
 
 ### Dashboard
 
-Run `draftsmith` with no arguments (or double-click `draftsmith.exe`) on the PC you play on and everything is on: the dashboard at http://127.0.0.1:8080, opened in your browser, background sync, the live champ select page, the overlay beside the League client, and the in-game build. It finds `.env` and `data/` next to the exe if they aren't in the current folder. If it can't start, the window stays open with the error until you press Enter.
+Run `draftsmith` with no arguments (or double-click `draftsmith.exe`) on the PC you play on and everything is on: the dashboard at http://127.0.0.1:8080, opened in your browser, background sync, the live champ select page, the overlay beside the League client, and the in-game build. It finds `.env` and `data/` next to the exe if they aren't in the current folder. If it can't start, the window stays open with the error until you press Enter. For a desktop shortcut, point it at `draftsmith.exe` and use `cmd/draftsmith/winres/icon.ico` (the dashboard's logo) as its icon.
 
 `draftsmith serve` is the same without opening the browser, and takes flags to turn things off:
 
