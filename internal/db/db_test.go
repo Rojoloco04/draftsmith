@@ -434,4 +434,3 @@ func TestTwoAccounts(t *testing.T) {
 		t.Errorf("dropped account's rank is still indexed: %+v", r)
 	}
 }
-

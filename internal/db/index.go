@@ -33,8 +33,15 @@ type IndexResult struct {
 // cleared first.
 func (d *DB) Index(ctx context.Context, s *store.Store, puuids []string) (IndexResult, error) {
 	var res IndexResult
-	if len(puuids) == 0 || slices.Contains(puuids, "") {
-		return res, errors.New("index: no tracked account")
+	if slices.Contains(puuids, "") {
+		return res, errors.New("index: an account without a PUUID")
+	}
+	if len(puuids) == 0 {
+		// The last account was removed: nothing to show.
+		if err := d.clear(ctx); err != nil {
+			return res, err
+		}
+		return res, d.setSetting(ctx, "accounts", "")
 	}
 	prev, err := d.setting(ctx, "accounts")
 	if err != nil {

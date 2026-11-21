@@ -222,3 +222,10 @@ func (c *Client) LeagueEntries(ctx context.Context, puuid string) ([]LeagueEntry
 	err := c.getJSON(ctx, c.platformURL("/lol/league/v4/entries/by-puuid/"+url.PathEscape(puuid)), &out)
 	return out, err
 }
+
+// CheckKey makes one cheap call (the platform's status) to see whether
+// Riot takes the key. It returns ErrAuth if it doesn't.
+func (c *Client) CheckKey(ctx context.Context) error {
+	_, err := c.getRaw(ctx, c.platformURL("/lol/status/v4/platform-data"))
+	return err
+}

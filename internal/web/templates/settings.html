@@ -1,0 +1,93 @@
+{{define "content"}}
+<div class="pagehead">
+  <h1>Settings</h1>
+</div>
+{{template "settingsBody" .}}
+{{end}}
+
+{{/* The settings forms. Each answers with this block again, its result
+     shown under the form that sent it. */}}
+{{define "settingsBody"}}
+<div id="settings" class="settings">
+  {{if not .Local}}<p class="alert">You're looking at these from another device. Settings can only be changed on the PC Draftsmith runs on.</p>{{end}}
+  {{if and (not .Settings.Accounts) .Local}}
+  <section class="card set-welcome">
+    <p class="eyebrow">Welcome to Draftsmith</p>
+    <h2>Two steps to your dashboard</h2>
+    <ol class="set-steps">
+      <li class="{{if .Settings.KeySet}}done{{end}}">Paste a Riot API key, so Draftsmith can read your games.</li>
+      <li>Add your Riot ID. Your ranked history starts syncing right away.</li>
+    </ol>
+  </section>
+  {{end}}
+
+  <section class="card set-card">
+    <h2>Riot API key</h2>
+    <p class="note top">Draftsmith reads your games from Riot with your own key. Sign in at <a href="https://developer.riotgames.com" target="_blank" rel="noopener">developer.riotgames.com</a> with your Riot account and copy the development key on the dashboard. It works right away but expires every 24 hours; register a personal app there for a key that lasts.</p>
+    <form class="set-row" hx-post="/settings/key" hx-target="#settings" hx-swap="outerHTML" hx-disabled-elt="find button">
+      <label class="set-field"><span>Key</span>
+        <input type="password" name="key" autocomplete="off" spellcheck="false" required
+          placeholder="{{if .Settings.KeySet}}Saved · ends in {{.Settings.KeyHint}}{{else}}RGAPI-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx{{end}}"{{if not .Local}} disabled{{end}}>
+      </label>
+      <button type="submit" class="btn primary"{{if not .Local}} disabled{{end}}><span class="when-idle">{{if .Settings.KeySet}}Replace key{{else}}Check and save{{end}}</span><span class="when-busy">Checking…</span></button>
+    </form>
+    {{if eq .Section "key"}}{{template "setMsg" .}}{{end}}
+  </section>
+
+  <section class="card set-card">
+    <h2>Accounts</h2>
+    {{if .Settings.Accounts}}
+    <ul class="set-accounts">
+      {{range .Settings.Accounts}}
+      <li>
+        <span><strong>{{.RiotID}}</strong> <span class="muted">{{.Platform}}{{if not .LastSync.IsZero}} · synced {{ago .LastSync}}{{end}}{{if and .Platform (ne .Platform $.Settings.Platform)}} · not synced while the region is {{$.Settings.Platform}}{{end}}</span></span>
+        {{if $.Local}}<form hx-post="/settings/accounts/remove" hx-target="#settings" hx-swap="outerHTML" hx-confirm="Stop tracking {{.RiotID}}? Its games stay on disk.">
+          <input type="hidden" name="puuid" value="{{.PUUID}}">
+          <button type="submit" class="btn btn-quiet">Remove</button>
+        </form>{{end}}
+      </li>
+      {{end}}
+    </ul>
+    {{else}}
+    <p class="note top">No accounts yet.</p>
+    {{end}}
+    {{if .Local}}
+    <form class="set-row" hx-post="/settings/accounts" hx-target="#settings" hx-swap="outerHTML" hx-disabled-elt="find button">
+      <label class="set-field"><span>Riot ID</span>
+        <input type="text" name="riot_id" placeholder="Name#TAG" autocomplete="off" spellcheck="false" required{{if not .Settings.KeySet}} disabled{{end}}>
+      </label>
+      <button type="submit" class="btn primary"{{if not .Settings.KeySet}} disabled title="Save a key first"{{end}}><span class="when-idle">Add account</span><span class="when-busy">Looking up…</span></button>
+    </form>
+    <p class="note">Add every account you play ranked on (in {{.Settings.Platform}}); the dashboard can show them one at a time or together.</p>
+    {{end}}
+    {{if eq .Section "accounts"}}{{template "setMsg" .}}{{end}}
+  </section>
+
+  <section class="card set-card">
+    <h2>Options</h2>
+    <form class="set-grid" hx-post="/settings/options" hx-target="#settings" hx-swap="outerHTML" hx-disabled-elt="find button">
+      <label class="set-field"><span>Region</span>
+        <select name="platform"{{if not .Local}} disabled{{end}}>
+          {{range .Platforms}}<option value="{{.ID}}"{{if eq .ID $.Settings.Platform}} selected{{end}}>{{.Name}}</option>{{end}}
+        </select>
+      </label>
+      <label class="set-field"><span>Queues</span>
+        <select name="queues"{{if not .Local}} disabled{{end}}>
+          <option value="solo"{{if eq .Settings.Queues "solo"}} selected{{end}}>Ranked Solo/Duo</option>
+          <option value="flex"{{if eq .Settings.Queues "flex"}} selected{{end}}>Ranked Flex</option>
+          <option value="both"{{if eq .Settings.Queues "both"}} selected{{end}}>Both</option>
+        </select>
+      </label>
+      <label class="set-check"><input type="checkbox" name="overlay"{{if .Settings.Overlay}} checked{{end}}{{if not .Local}} disabled{{end}}>
+        <span>Champ select overlay beside the League client <span class="muted">(takes effect next start)</span></span>
+      </label>
+      <div><button type="submit" class="btn primary"{{if not .Local}} disabled{{end}}><span class="when-idle">Save</span><span class="when-busy">Saving…</span></button></div>
+    </form>
+    {{if eq .Section "options"}}{{template "setMsg" .}}{{end}}
+  </section>
+
+  {{with .Settings.File}}<p class="note">Saved in {{.}}, next to Draftsmith.</p>{{end}}
+</div>
+{{end}}
+
+{{define "setMsg"}}{{if .Err}}<p class="set-msg neg" role="alert">{{.Err}}</p>{{else if .Msg}}<p class="set-msg pos" role="status">{{.Msg}}</p>{{end}}{{end}}

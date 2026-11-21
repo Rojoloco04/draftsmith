@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -101,5 +102,28 @@ func TestAccounts(t *testing.T) {
 	}
 	if days, err := s.RankSnapshotDays("nobody"); err != nil || len(days) != 0 {
 		t.Errorf("days for an unknown account: %v, %v", days, err)
+	}
+}
+
+func TestUpdateState(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.UpdateState(func(st *State) error {
+		st.Accounts = append(st.Accounts, Account{PUUID: "p1", RiotID: "A#1"})
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.UpdateState(func(st *State) error {
+		st.Accounts = nil
+		return errors.New("no")
+	}); err == nil {
+		t.Fatal("f's error should come back")
+	}
+	st, _ := s.LoadState()
+	if len(st.Accounts) != 1 || st.Accounts[0].RiotID != "A#1" {
+		t.Errorf("state after a failed update: %+v", st.Accounts)
 	}
 }

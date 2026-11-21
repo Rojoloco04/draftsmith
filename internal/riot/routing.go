@@ -17,3 +17,25 @@ const (
 	QueueSoloDuo = 420
 	QueueFlex    = 440
 )
+
+// Platform is a server players pick, for a settings menu.
+type Platform struct{ ID, Name string }
+
+// Platforms lists every platform RegionFor knows, in menu order.
+var Platforms = []Platform{
+	{"na1", "North America"},
+	{"euw1", "Europe West"},
+	{"eun1", "Europe Nordic & East"},
+	{"kr", "Korea"},
+	{"br1", "Brazil"},
+	{"la1", "Latin America North"},
+	{"la2", "Latin America South"},
+	{"oc1", "Oceania"},
+	{"jp1", "Japan"},
+	{"tr1", "Türkiye"},
+	{"ru", "Russia"},
+	{"me1", "Middle East"},
+	{"sg2", "Southeast Asia"},
+	{"tw2", "Taiwan"},
+	{"vn2", "Vietnam"},
+}

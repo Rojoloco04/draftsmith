@@ -18,6 +18,9 @@ type Options struct {
 	// Max caps how many new matches to fetch this run (0 = no cap).
 	Max int
 	Log io.Writer
+	// Progress, if set, hears how many of the games to fetch are done:
+	// (i, n) before game i and (n, n) at the end.
+	Progress func(done, total int)
 }
 
 type Result struct {
@@ -95,6 +98,10 @@ func Sync(ctx context.Context, c *riot.Client, s *store.Store, st *store.Account
 		if err := ctx.Err(); err != nil {
 			return res, err
 		}
+		// Counted before each game, so one that fails still moves it on.
+		if opt.Progress != nil {
+			opt.Progress(i, len(todo))
+		}
 		if !s.HasMatch(id) {
 			raw, err := c.MatchRaw(ctx, id)
 			if err != nil {
@@ -140,6 +147,9 @@ func Sync(ctx context.Context, c *riot.Client, s *store.Store, st *store.Account
 		if (i+1)%25 == 0 || i+1 == len(todo) {
 			logf("  %d/%d games (%s elapsed)", i+1, len(todo), time.Since(start).Round(time.Second))
 		}
+	}
+	if opt.Progress != nil {
+		opt.Progress(len(todo), len(todo))
 	}
 	return res, nil
 }

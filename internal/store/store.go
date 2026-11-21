@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -157,6 +158,25 @@ func (s *Store) migrateRanks(puuid string) error {
 		}
 	}
 	return nil
+}
+
+// stateMu serializes UpdateState across every Store in the process: a
+// background sync and the settings page both change the tracked accounts.
+var stateMu sync.Mutex
+
+// UpdateState loads the state, lets f change it, and saves it, with no
+// other UpdateState in between. Nothing is saved if f fails.
+func (s *Store) UpdateState(f func(*State) error) (State, error) {
+	stateMu.Lock()
+	defer stateMu.Unlock()
+	st, err := s.LoadState()
+	if err != nil {
+		return st, err
+	}
+	if err := f(&st); err != nil {
+		return st, err
+	}
+	return st, s.SaveState(st)
 }
 
 func (s *Store) SaveState(st State) error {

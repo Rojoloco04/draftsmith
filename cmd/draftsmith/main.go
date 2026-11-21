@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rojoloco04/draftsmith/internal/analysis"
+	"github.com/rojoloco04/draftsmith/internal/appwin"
 	"github.com/rojoloco04/draftsmith/internal/db"
 	"github.com/rojoloco04/draftsmith/internal/ingest"
 	"github.com/rojoloco04/draftsmith/internal/meta"
@@ -31,9 +32,9 @@ const version = "0.1.0"
 const usage = `draftsmith: ranked League of Legends stats from your own match archive
 
 Usage:
-  draftsmith                          everything: the dashboard, background sync, champ
-                                      select, the overlay and the in-game build, opened
-                                      in your browser (same as double-clicking the exe)
+  draftsmith                          the desktop app: the dashboard in its own window,
+                                      background sync, champ select, the overlay and the
+                                      in-game build (same as double-clicking the exe)
   draftsmith sync    [flags]          archive ranked games (and today's rank) from the Riot API
   draftsmith serve   [flags]          run the dashboard (and sync in the background)
   draftsmith reindex [flags]          rebuild the dashboard's SQLite index from the archive
@@ -45,17 +46,19 @@ Usage:
   draftsmith version
 
 Config comes from flags, environment variables, or a .env file in the
-current directory:
-  RIOT_API_KEY        your Riot key (required for sync)
+current directory (the app's Settings page writes it):
+  RIOT_API_KEY          your Riot key (required for sync)
   DRAFTSMITH_RIOT_ID    Name#TAG; sync adds it to the tracked accounts
+  DRAFTSMITH_PLATFORM   na1, euw1, kr, ... (default na1)
+  DRAFTSMITH_QUEUES     solo, flex or both (default solo)
+  DRAFTSMITH_OVERLAY    off to keep the champ select overlay closed
+  DRAFTSMITH_DATA       archive directory (default ./data)
+  DRAFTSMITH_LEAGUE_DIR League install directory, for watch
 
 Several accounts can share one archive: run "draftsmith sync --riot-id
 Name#TAG" once per account to add it. After that, sync and serve keep
 every tracked account up to date, and the dashboard can switch between
 them or show them together.
-  DRAFTSMITH_PLATFORM   na1, euw1, kr, ... (default na1)
-  DRAFTSMITH_DATA       archive directory (default ./data)
-  DRAFTSMITH_LEAGUE_DIR League install directory, for watch
 
 Run "draftsmith <command> -h" for command flags.
 `
@@ -64,6 +67,7 @@ func main() {
 	bare := len(os.Args) < 2
 	if bare {
 		useExeDir()
+		appwin.MarkOwnConsole()
 		rebuildIfChanged(os.Stderr)
 	}
 	loadDotEnv(".env")
@@ -71,10 +75,20 @@ func main() {
 	defer stop()
 
 	if bare {
-		// No command: run everything, the way a double-click would want it.
-		if err := cmdServe(ctx, []string{"--open"}); err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			waitForEnter()
+		// No command: run everything as a desktop app, the way a
+		// double-click wants it. The console a double-click opens is
+		// hidden and the log goes to a file; from a terminal it stays.
+		hidden := appwin.HideOwnConsole()
+		if hidden {
+			logOut = openLogFile(env("DRAFTSMITH_DATA", "data"))
+		}
+		if err := cmdServe(ctx, []string{"--app"}); err != nil {
+			if hidden {
+				appwin.Alert("Draftsmith", "Draftsmith couldn't start:\n\n"+sentenceCase(err.Error()))
+			} else {
+				fmt.Fprintln(os.Stderr, "error:", err)
+				waitForEnter()
+			}
 			os.Exit(1)
 		}
 		return
@@ -121,7 +135,7 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.StringVar(&c.data, "data", env("DRAFTSMITH_DATA", "data"), "archive directory")
 	fs.StringVar(&c.platform, "platform", env("DRAFTSMITH_PLATFORM", "na1"), "platform: na1, euw1, kr, ...")
 	fs.StringVar(&c.riotID, "riot-id", env("DRAFTSMITH_RIOT_ID", ""), "Riot ID as Name#TAG")
-	fs.StringVar(&c.queues, "queues", "solo", "ranked queues: solo, flex, or both")
+	fs.StringVar(&c.queues, "queues", env("DRAFTSMITH_QUEUES", "solo"), "ranked queues: solo, flex, or both")
 }
 
 func (c *common) queueList() ([]int, error) {
@@ -175,10 +189,18 @@ type syncer struct {
 	dataDir   string
 	timelines bool
 	max       int
+	// progress, if set, hears what a run is doing: a stage, and while it
+	// fetches games, how many of how many.
+	progress func(stage string, done, total int)
 }
 
 func newSyncer(c common, rate string) (*syncer, error) {
-	key := os.Getenv("RIOT_API_KEY")
+	return newSyncerKey(c, rate, os.Getenv("RIOT_API_KEY"))
+}
+
+// newSyncerKey is newSyncer with the key given rather than read from the
+// environment (the settings page checks a new key before saving it).
+func newSyncerKey(c common, rate, key string) (*syncer, error) {
 	if key == "" {
 		return nil, errors.New("RIOT_API_KEY is not set (get one at developer.riotgames.com)")
 	}
@@ -204,10 +226,17 @@ func newSyncer(c common, rate string) (*syncer, error) {
 	return &syncer{client: client, store: s, queues: queues, riotID: c.riotID, dataDir: c.data, timelines: true}, nil
 }
 
+func (sy *syncer) stage(stage string, done, total int) {
+	if sy.progress != nil {
+		sy.progress(stage, done, total)
+	}
+}
+
 // run adds the --riot-id account if it isn't tracked yet, then for every
 // tracked account snapshots today's rank, archives new games, and saves
-// state. Progress goes to out. The returned state lists every known
-// account, even if syncing failed.
+// its progress. Progress goes to out. The returned state lists every known
+// account, even if syncing failed. Accounts added or removed while it runs
+// (from the settings page) are kept or dropped, not overwritten.
 func (sy *syncer) run(ctx context.Context, out io.Writer) (store.State, error) {
 	s := sy.store
 	st, err := s.LoadState()
@@ -215,7 +244,7 @@ func (sy *syncer) run(ctx context.Context, out io.Writer) (store.State, error) {
 		return st, err
 	}
 	if sy.riotID != "" && !tracks(st, sy.riotID) {
-		if err := sy.addAccount(ctx, &st, out); err != nil {
+		if st, _, err = sy.addAccount(ctx, sy.riotID, out); err != nil {
 			return st, err
 		}
 	}
@@ -224,8 +253,7 @@ func (sy *syncer) run(ctx context.Context, out io.Writer) (store.State, error) {
 	}
 
 	var errs []error
-	for i := range st.Accounts {
-		a := &st.Accounts[i]
+	for _, a := range st.Accounts {
 		if a.Platform != "" && a.Platform != sy.client.Platform() {
 			fmt.Fprintf(out, "skipping %s: it's on %s and this sync uses %s (--platform)\n", a.RiotID, a.Platform, sy.client.Platform())
 			continue
@@ -233,15 +261,25 @@ func (sy *syncer) run(ctx context.Context, out io.Writer) (store.State, error) {
 		if len(st.Accounts) > 1 {
 			fmt.Fprintf(out, "%s:\n", a.RiotID)
 		}
-		if err := sy.runAccount(ctx, a, out); err != nil {
+		if err := sy.runAccount(ctx, &a, out); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", a.RiotID, err))
 		}
-		if err := s.SaveState(st); err != nil {
+		if _, err := s.UpdateState(func(cur *store.State) error {
+			if p := cur.Find(a.PUUID); p != nil {
+				p.BackfillDone, p.LastSync = a.BackfillDone, a.LastSync
+			}
+			return nil
+		}); err != nil {
 			return st, err
 		}
 		if ctx.Err() != nil {
 			break
 		}
+	}
+	if cur, err := s.LoadState(); err != nil {
+		errs = append(errs, err)
+	} else {
+		st = cur
 	}
 	return st, errors.Join(errs...)
 }
@@ -256,28 +294,36 @@ func tracks(st store.State, riotID string) bool {
 	return false
 }
 
-// addAccount looks up sy.riotID and tracks it. An account already tracked
-// under an older Riot ID is renamed instead.
-func (sy *syncer) addAccount(ctx context.Context, st *store.State, out io.Writer) error {
-	name, tag, ok := strings.Cut(sy.riotID, "#")
-	if !ok {
-		return fmt.Errorf("riot id %q should look like Name#TAG", sy.riotID)
+// addAccount looks up riotID and tracks it. An account already tracked
+// under an older Riot ID is renamed instead. It returns the new state and
+// the Riot ID as Riot spells it.
+func (sy *syncer) addAccount(ctx context.Context, riotID string, out io.Writer) (store.State, string, error) {
+	name, tag, ok := strings.Cut(strings.TrimSpace(riotID), "#")
+	name, tag = strings.TrimSpace(name), strings.TrimSpace(tag)
+	if !ok || name == "" || tag == "" {
+		return store.State{}, "", fmt.Errorf("riot id %q should look like Name#TAG", riotID)
 	}
+	sy.stage("Looking up "+name+"#"+tag, 0, 0)
 	acct, err := sy.client.AccountByRiotID(ctx, name, tag)
 	if err != nil {
-		return fmt.Errorf("looking up %s: %w", sy.riotID, err)
+		return store.State{}, "", fmt.Errorf("looking up %s#%s: %w", name, tag, err)
 	}
-	riotID := acct.GameName + "#" + acct.TagLine
-	if a := st.Find(acct.PUUID); a != nil {
-		fmt.Fprintf(out, "%s is now %s\n", a.RiotID, riotID)
-		a.RiotID = riotID
-	} else {
+	canon := acct.GameName + "#" + acct.TagLine
+	st, err := sy.store.UpdateState(func(st *store.State) error {
+		if a := st.Find(acct.PUUID); a != nil {
+			if a.RiotID != canon {
+				fmt.Fprintf(out, "%s is now %s\n", a.RiotID, canon)
+				a.RiotID = canon
+			}
+			return nil
+		}
 		st.Accounts = append(st.Accounts, store.Account{
-			PUUID: acct.PUUID, RiotID: riotID, Platform: sy.client.Platform(), BackfillDone: map[int]bool{},
+			PUUID: acct.PUUID, RiotID: canon, Platform: sy.client.Platform(), BackfillDone: map[int]bool{},
 		})
-		fmt.Fprintf(out, "tracking %s (%s)\n", riotID, sy.client.Platform())
-	}
-	return sy.store.SaveState(*st)
+		fmt.Fprintf(out, "tracking %s (%s)\n", canon, sy.client.Platform())
+		return nil
+	})
+	return st, canon, err
 }
 
 // runAccount snapshots one account's rank and archives its new games.
@@ -291,11 +337,13 @@ func (sy *syncer) runAccount(ctx context.Context, a *store.Account, out io.Write
 			fmt.Fprintf(out, "%s: %s %s %d LP (%dW %dL)\n", e.QueueType, e.Tier, e.Rank, e.LeaguePoints, e.Wins, e.Losses)
 		}
 	}
+	sy.stage("Listing "+a.RiotID+"'s ranked games", 0, 0)
 	res, err := ingest.Sync(ctx, sy.client, sy.store, a, ingest.Options{
 		Queues:    sy.queues,
 		Timelines: sy.timelines,
 		Max:       sy.max,
 		Log:       out,
+		Progress:  func(done, total int) { sy.stage("Fetching "+a.RiotID+"'s games", done, total) },
 	})
 	a.LastSync = time.Now()
 	fmt.Fprintf(out, "archived %d matches and %d timelines (%d timelines no longer on Riot's side, %d errors)\n",
@@ -642,4 +690,12 @@ func loadDotEnv(path string) {
 			os.Setenv(k, v)
 		}
 	}
+}
+
+// sentenceCase capitalizes an error message for a dialog.
+func sentenceCase(msg string) string {
+	if msg == "" {
+		return msg
+	}
+	return strings.ToUpper(msg[:1]) + msg[1:]
 }

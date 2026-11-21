@@ -31,19 +31,20 @@
           {{range .Accounts}}<a href="/account?id={{.RiotID}}&amp;back={{$.Path}}%3Fqueue%3D{{$.Queue.Key}}"{{if and $.Account (eq $.Account.PUUID .PUUID)}} aria-current="true"{{end}}>{{.RiotID}}</a>{{end}}
         </nav>
       </details>
-      {{else}}
+      {{else if .Accounts}}
       <span class="who">{{template "who" .}}</span>
       {{end}}
       {{template "sync" .Sync}}
+      <a class="btn btn-icon" href="/settings" aria-label="Settings" title="Settings"{{if eq .Nav "settings"}} aria-current="page"{{end}}><svg class="i"><use href="#i-settings"/></svg></a>
     </div>
   </div>
 </header>
 <main class="wrap">
+{{if and .Status.KeyRejected (ne .Nav "settings")}}<p class="alert" role="alert">Riot rejected your API key, so new games aren't coming in. Dev keys expire after 24 hours. <a href="/settings">Paste a new one in Settings</a>.</p>{{end}}
 {{template "content" .}}
 </main>
 <footer class="wrap foot">
   {{with .Status}}
-    {{if .Syncing}}<span class="pill live">Syncing…</span>{{end}}
     {{if .SyncDisabled}}Background sync off: {{.SyncDisabled}}.{{else}}Last sync {{ago .LastSync}}.{{end}}
     {{if .LastError}}<span class="neg">Last sync failed: {{.LastError}}</span>{{end}}
   {{end}}
@@ -69,6 +70,7 @@
     <symbol id="i-tiers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20V11M12 20V4M18 20v-6M3 20h18"/></symbol>
     <symbol id="i-select" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
     <symbol id="i-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10l5 5 5-5"/></symbol>
     <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
     <symbol id="r-top" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h14l-4 4H7v6l-4 4z"/><path opacity=".35" d="M21 7v14H7l4-4h6v-6zM10 10h4v4h-4z"/></symbol>

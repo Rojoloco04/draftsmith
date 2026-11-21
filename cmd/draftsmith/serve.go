@@ -21,6 +21,7 @@ import (
 	"github.com/rojoloco04/draftsmith/internal/meta"
 	"github.com/rojoloco04/draftsmith/internal/opgg"
 	"github.com/rojoloco04/draftsmith/internal/overlay"
+	"github.com/rojoloco04/draftsmith/internal/riot"
 	"github.com/rojoloco04/draftsmith/internal/store"
 	"github.com/rojoloco04/draftsmith/internal/web"
 )
@@ -39,8 +40,9 @@ func cmdServe(ctx context.Context, args []string) error {
 	noWatch := fs.Bool("no-watch", false, "don't follow the League client (no champ select page, overlay or in-game build)")
 	leagueDir := fs.String("league-dir", env("DRAFTSMITH_LEAGUE_DIR", ""), "League install directory (default: the standard install location)")
 	minGames := fs.Int("min-games", 2, "champ select: suggest only champions with at least this many games in your lane")
-	noOverlay := fs.Bool("no-overlay", false, "don't dock the champ select window beside the League client")
+	noOverlay := fs.Bool("no-overlay", strings.EqualFold(env("DRAFTSMITH_OVERLAY", "on"), "off"), "don't dock the champ select window beside the League client")
 	open := fs.Bool("open", false, "open the dashboard in your browser once it's up")
+	app := fs.Bool("app", false, "show the dashboard in its own window (closing it stops serve); the browser if that fails")
 	fs.Parse(args)
 	watchClient := !*noWatch
 	showOverlay := watchClient && !*noOverlay
@@ -48,7 +50,9 @@ func cmdServe(ctx context.Context, args []string) error {
 	if err := checkListenAddr(*addr); err != nil {
 		return err
 	}
-	logger := log.New(os.Stdout, "", log.LstdFlags)
+	logger := log.New(logOut, "", log.LstdFlags)
+	ctx, quit := context.WithCancel(ctx)
+	defer quit()
 
 	s, err := store.Open(c.data)
 	if err != nil {
@@ -59,35 +63,28 @@ func cmdServe(ctx context.Context, args []string) error {
 		return err
 	}
 
-	var sy *syncer
+	ctl := newSyncControl()
 	disabled := ""
 	switch {
 	case *noSync:
-		disabled = "started with --no-sync"
+		disabled, ctl.off = "started with --no-sync", true
 	case *every <= 0:
-		disabled = "--sync-every is 0"
+		disabled, ctl.off = "--sync-every is 0", true
 	default:
-		sy, err = newSyncer(c, *rate)
-		if err != nil {
-			if len(st.Accounts) == 0 {
-				return err
-			}
+		sy, err := newSyncer(c, *rate)
+		switch {
+		case err == nil:
+			sy.timelines = !*noTimelines
+			ctl.set(sy)
+		case os.Getenv("RIOT_API_KEY") == "":
+			disabled = "no Riot API key yet; add one in Settings"
+		default:
 			disabled = err.Error()
 			logger.Printf("background sync off: %v", err)
-		} else {
-			sy.timelines = !*noTimelines
 		}
 	}
-
-	// Without an archive there is nothing to show, so sync once up front.
-	if len(st.Accounts) == 0 {
-		if sy == nil {
-			return errors.New("no archive yet; run `draftsmith sync --riot-id Name#TAG` first")
-		}
-		logger.Printf("no archive yet, running a first sync")
-		if st, err = sy.run(ctx, logWriter{logger}); err != nil {
-			return err
-		}
+	if len(st.Accounts) == 0 && ctl.off {
+		return errors.New("no archive yet; run `draftsmith sync --riot-id Name#TAG` first")
 	}
 
 	d, err := db.OpenDir(ctx, c.data)
@@ -112,6 +109,13 @@ func cmdServe(ctx context.Context, args []string) error {
 		s.LastSync = st.LastSync()
 		s.SyncDisabled = disabled
 	})
+	srv.SetSettings(&settingsBackend{
+		envPath: envFile(), c: c, rate: *rate, timelines: !*noTimelines, overlay: !*noOverlay,
+		store: s, db: d, srv: srv, ctl: ctl, logger: logger,
+	})
+	if len(st.Accounts) > 0 {
+		ctl.markReady()
+	}
 	var m *meta.Service
 	if !*noMeta {
 		m = meta.New(d, *opggEndpoint)
@@ -128,6 +132,11 @@ func cmdServe(ctx context.Context, args []string) error {
 
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {
+		if *app && isDraftsmith(*addr) {
+			// Already running (a second double-click): open another
+			// window on it rather than failing.
+			return appWindow(ctx, "http://"+*addr, logger)
+		}
 		return err
 	}
 	if watchClient {
@@ -153,6 +162,19 @@ func cmdServe(ctx context.Context, args []string) error {
 			return lcu.New(creds).ImportRunes(ctx, page)
 		})
 		go func() {
+			// Suggestions come from the archive; with none yet, wait for
+			// the first sync to bring some.
+			select {
+			case <-ctl.ready:
+			default:
+				srv.WatchStarted("suggestions start once the first sync is done")
+				select {
+				case <-ctl.ready:
+				case <-ctx.Done():
+					return
+				}
+				srv.WatchStarted("")
+			}
 			o := watchOpts{leagueDir: *leagueDir, minGames: *minGames, suggest: true, onBoard: srv.WatchBoard}
 			w, note := newWatcher(ctx, d, m, o, logger)
 			if note != "" {
@@ -199,30 +221,48 @@ func cmdServe(ctx context.Context, args []string) error {
 		// shutdown.
 		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
-	logger.Printf("dashboard for %s at http://%s", st.RiotIDs(), ln.Addr())
-	if *open {
-		if err := openBrowser("http://" + ln.Addr().String()); err != nil {
-			logger.Printf("couldn't open a browser: %v", err)
-		}
+	url := "http://" + ln.Addr().String()
+	if len(st.Accounts) > 0 {
+		logger.Printf("dashboard for %s at %s", st.RiotIDs(), url)
+	} else {
+		logger.Printf("dashboard at %s; add your account in Settings", url)
 	}
 
-	if sy != nil {
-		// The Refresh button asks for a sync now. One request can wait;
-		// more while it does are dropped.
-		now := make(chan struct{}, 1)
-		srv.SetRefresh(func() bool {
-			select {
-			case now <- struct{}{}:
-				return true
-			default:
-				return false
-			}
-		})
-		go syncLoop(ctx, sy, d, srv, *every, now, logger)
+	if !ctl.off {
+		ctl.progress = func(stage string, done, total int) {
+			srv.SetStatus(func(s *web.Status) {
+				if s.Stage != stage || done == 0 {
+					s.StageStart = time.Now()
+				}
+				s.Stage, s.Done, s.Total = stage, done, total
+			})
+		}
+		if sy := ctl.get(); sy != nil {
+			ctl.set(sy) // picks up progress
+			srv.SetRefresh(ctl.request)
+		}
+		go syncLoop(ctx, ctl, s, d, srv, *every, logger)
 	}
 
 	errc := make(chan error, 1)
 	go func() { errc <- hs.Serve(ln) }()
+	switch {
+	case *app:
+		go func() {
+			if err := appWindow(ctx, url, logger); err != nil {
+				logger.Printf("app window: %v; opening the browser instead", err)
+				if err := openBrowser(url); err != nil {
+					logger.Printf("couldn't open a browser: %v", err)
+				}
+				return
+			}
+			quit() // the window closed: so does Draftsmith
+		}()
+	case *open:
+		if err := openBrowser(url); err != nil {
+			logger.Printf("couldn't open a browser: %v", err)
+		}
+	}
 	select {
 	case err := <-errc:
 		return err
@@ -234,47 +274,90 @@ func cmdServe(ctx context.Context, args []string) error {
 	return hs.Shutdown(shutCtx)
 }
 
-// syncLoop syncs right away, then every interval and whenever now
-// receives (the Refresh button), reindexing after each run. A sync from
-// now restarts the interval. Errors are logged and shown in the dashboard
-// footer; the next run tries again.
-func syncLoop(ctx context.Context, sy *syncer, d *db.DB, srv *web.Server, every time.Duration, now <-chan struct{}, logger *log.Logger) {
+// syncLoop syncs right away, then every interval and whenever ctl.now
+// receives (the Refresh button, the settings page), reindexing after each
+// run. A sync from now restarts the interval. While there's no syncer (no
+// key yet) or nothing to sync, it waits. Errors are logged and shown in
+// the dashboard; the next run tries again.
+func syncLoop(ctx context.Context, ctl *syncControl, s *store.Store, d *db.DB, srv *web.Server, every time.Duration, logger *log.Logger) {
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
-		srv.SetStatus(func(s *web.Status) { s.Syncing = true })
-		st, err := sy.run(ctx, logWriter{logger})
-		if ctx.Err() != nil {
-			return
-		}
-		if len(st.Accounts) > 0 {
-			res, ierr := d.Index(ctx, sy.store, st.PUUIDs())
-			if ierr != nil {
-				err = errors.Join(err, fmt.Errorf("indexing: %w", ierr))
-			} else if res.Added+res.Updated > 0 {
-				logger.Printf("indexed %d new games (%d updated)", res.Added, res.Updated)
+		if sy := ctl.get(); sy != nil {
+			syncOnce(ctx, ctl, sy, s, d, srv, logger)
+			if ctx.Err() != nil {
+				return
 			}
 		}
-		if err != nil {
-			logger.Printf("sync failed: %v", err)
-		}
-		srv.SetStatus(func(s *web.Status) {
-			s.Syncing = false
-			s.LastSync = time.Now()
-			s.LastError = ""
-			if err != nil {
-				s.LastError = err.Error()
-			}
-		})
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-		case <-now:
+		case <-ctl.now:
 			logger.Printf("sync requested from the dashboard")
 			t.Reset(every)
 		}
 	}
+}
+
+// syncOnce runs one sync and reindex, keeping the dashboard's status, its
+// accounts and the first-sync page up to date.
+func syncOnce(ctx context.Context, ctl *syncControl, sy *syncer, s *store.Store, d *db.DB, srv *web.Server, logger *log.Logger) {
+	before, err := s.LoadState()
+	if err != nil {
+		logger.Printf("sync: %v", err)
+		return
+	}
+	if len(before.Accounts) == 0 && sy.riotID == "" {
+		return // nothing to sync until an account is added
+	}
+	first := true
+	for _, a := range before.Accounts {
+		if !a.LastSync.IsZero() {
+			first = false
+		}
+	}
+	srv.SetStatus(func(s *web.Status) {
+		s.Syncing, s.FirstSync = true, first
+		s.Stage, s.Done, s.Total = "Starting", 0, 0
+	})
+	st, err := sy.run(ctx, logWriter{logger})
+	if ctx.Err() != nil {
+		return
+	}
+	added := 0
+	if len(st.Accounts) > 0 {
+		res, ierr := ctl.index(ctx, d, s, st)
+		if ierr != nil {
+			err = errors.Join(err, fmt.Errorf("indexing: %w", ierr))
+		} else if res.Added+res.Updated > 0 {
+			added = res.Added
+			logger.Printf("indexed %d new games (%d updated)", res.Added, res.Updated)
+		}
+		srv.SetAccounts(webAccounts(st))
+		if ierr == nil {
+			ctl.markReady()
+		}
+	}
+	if err != nil {
+		logger.Printf("sync failed: %v", err)
+	}
+	rejected := errors.Is(err, riot.ErrAuth)
+	srv.SetStatus(func(s *web.Status) {
+		s.Syncing, s.Stage, s.Done, s.Total = false, "", 0, 0
+		// A first sync that failed before bringing any games keeps its
+		// page up, with the error and a way to settings.
+		s.FirstSync = first && err != nil && added == 0
+		s.LastSync = time.Now()
+		s.KeyRejected = rejected
+		s.LastError = ""
+		switch {
+		case rejected:
+			s.LastError = "Riot rejected the API key (development keys expire after 24 hours). Paste a new one in Settings."
+		case err != nil:
+			s.LastError = err.Error()
+		}
+	})
 }
 
 // openBrowser opens url in the default browser.

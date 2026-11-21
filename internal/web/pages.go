@@ -82,7 +82,7 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 	}
 	d := overviewData{Base: s.base(r, "Overview", "overview"), Sum: sum, Patch: latestPatch(sum)}
 
-	accts := s.accounts
+	accts := s.accts()
 	if d.Account != nil {
 		accts = []Account{*d.Account}
 	}

@@ -34,6 +34,44 @@ type Status struct {
 	LastError string
 	// SyncDisabled is set when serve runs without a Riot key or --no-sync.
 	SyncDisabled string
+
+	// Stage says what the running sync is doing ("Fetching Name#TAG's
+	// games"). While it fetches games, Done of Total are fetched, counting
+	// from StageStart.
+	Stage       string
+	Done, Total int
+	StageStart  time.Time
+	// FirstSync is set while the archive's first games sync; the archive
+	// pages show its progress until it's done.
+	FirstSync bool
+	// KeyRejected is set when Riot turned the API key down on the last
+	// sync (a dev key lasts 24 hours). Every page then points at settings.
+	KeyRejected bool
+}
+
+// Percent is how far the game fetch is, 0-100.
+func (s Status) Percent() int {
+	if s.Total <= 0 {
+		return 0
+	}
+	return min(100, s.Done*100/s.Total)
+}
+
+// Left estimates the fetch's remaining time from its pace so far, or ""
+// until there's a pace to go on.
+func (s Status) Left() string {
+	if s.Total <= 0 || s.Done < 3 || s.StageStart.IsZero() {
+		return ""
+	}
+	per := time.Since(s.StageStart) / time.Duration(s.Done)
+	left := per * time.Duration(s.Total-s.Done)
+	switch {
+	case left < time.Minute:
+		return "under a minute left"
+	case left < 90*time.Minute:
+		return fmt.Sprintf("about %d min left", int(left.Round(time.Minute)/time.Minute))
+	}
+	return fmt.Sprintf("about %.1f hours left", left.Hours())
 }
 
 // syncView is the header's refresh control.
@@ -59,26 +97,25 @@ type Server struct {
 	pages    map[string]*template.Template
 	meta     MetaSource
 
-	mu      sync.Mutex
-	status  Status
-	refresh func() bool
-	cs      champSelect
+	mu       sync.Mutex
+	status   Status
+	refresh  func() bool
+	settings SettingsStore
+	cs       champSelect
 	// importRunes, if set, puts a rune page in the League client.
 	importRunes RuneImporter
 }
 
 // New builds a server over an indexed database of my accounts' games.
 // With more than one account, the header can switch between them and
-// all of them together.
+// all of them together. With none yet, the archive pages send you to
+// settings to add one.
 func New(d *db.DB, accounts []Account, logger *log.Logger) (*Server, error) {
 	if logger == nil {
 		logger = log.New(io.Discard, "", 0)
 	}
-	if len(accounts) == 0 {
-		return nil, errors.New("web: no accounts")
-	}
 	s := &Server{db: d, accounts: accounts, log: logger, pages: map[string]*template.Template{}}
-	for _, p := range []string{"overview", "matches", "match", "champions", "champion", "tierlist", "champselect", "error"} {
+	for _, p := range []string{"overview", "matches", "match", "champions", "champion", "tierlist", "champselect", "error", "settings", "firstsync"} {
 		t, err := template.New(p).Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/parts.html", "templates/"+p+".html")
 		if err != nil {
 			return nil, fmt.Errorf("template %s: %w", p, err)
@@ -101,6 +138,22 @@ func (s *Server) SetStatus(f func(*Status)) {
 	f(&s.status)
 }
 
+// SetAccounts replaces the tracked accounts (after the settings page adds
+// or removes one, or the first sync finds the first).
+func (s *Server) SetAccounts(accounts []Account) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.accounts = accounts
+}
+
+// accts is the tracked accounts. The slice is never changed in place, so
+// callers may keep it.
+func (s *Server) accts() []Account {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.accounts
+}
+
 // SetRefresh enables the header's Refresh button. f asks for a sync now
 // and reports whether it was queued. It's called with the server's lock
 // held, so it must not block or call back into the server.
@@ -116,6 +169,9 @@ func (s *Server) syncView(wait bool) syncView {
 	return syncView{Status: s.status, CanRefresh: s.refresh != nil && s.status.SyncDisabled == "", Wait: wait}
 }
 
+// Status is the sync status the dashboard shows.
+func (s *Server) Status() Status { return s.getStatus() }
+
 func (s *Server) getStatus() Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -127,11 +183,17 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	static, _ := fs.Sub(staticFS, "static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/", cacheFor(time.Hour, http.FileServerFS(static))))
-	mux.HandleFunc("GET /{$}", s.overview)
-	mux.HandleFunc("GET /matches", s.matches)
-	mux.HandleFunc("GET /matches/{id}", s.match)
-	mux.HandleFunc("GET /champions", s.champions)
-	mux.HandleFunc("GET /champions/{name}", s.champion)
+	mux.HandleFunc("GET /{$}", s.archive(s.overview))
+	mux.HandleFunc("GET /matches", s.archive(s.matches))
+	mux.HandleFunc("GET /matches/{id}", s.archive(s.match))
+	mux.HandleFunc("GET /champions", s.archive(s.champions))
+	mux.HandleFunc("GET /champions/{name}", s.archive(s.champion))
+	mux.HandleFunc("GET /first-sync", s.firstSyncStatus)
+	mux.HandleFunc("GET /settings", s.settingsPage)
+	mux.HandleFunc("POST /settings/key", s.settingsKey)
+	mux.HandleFunc("POST /settings/options", s.settingsOptions)
+	mux.HandleFunc("POST /settings/accounts", s.settingsAddAccount)
+	mux.HandleFunc("POST /settings/accounts/remove", s.settingsRemoveAccount)
 	mux.HandleFunc("GET /tier-list", s.tierListPage)
 	mux.HandleFunc("GET /sync", s.syncStatus)
 	mux.HandleFunc("POST /sync", s.syncNow)
@@ -192,7 +254,7 @@ func queueFrom(r *http.Request) queueOpt {
 func (s *Server) base(r *http.Request, title, nav string) Base {
 	acct := s.account(r)
 	b := Base{
-		Title: title, Nav: nav, Path: r.URL.Path, RiotID: "All accounts", Account: acct, Accounts: s.accounts,
+		Title: title, Nav: nav, Path: r.URL.Path, RiotID: "All accounts", Account: acct, Accounts: s.accts(),
 		Queue: queueFrom(r), Queues: queueOpts,
 		Status: s.getStatus(), Sync: s.syncView(false), Now: time.Now(),
 	}
@@ -214,16 +276,17 @@ const acctCookie = "account"
 // account is the account selected for r, nil for all of them. With one
 // account there is nothing to choose.
 func (s *Server) account(r *http.Request) *Account {
-	if len(s.accounts) == 1 {
-		return &s.accounts[0]
+	accts := s.accts()
+	if len(accts) == 1 {
+		return &accts[0]
 	}
 	c, err := r.Cookie(acctCookie)
 	if err != nil {
 		return nil
 	}
-	for i, a := range s.accounts {
+	for i, a := range accts {
 		if strings.EqualFold(a.RiotID, c.Value) {
-			return &s.accounts[i]
+			return &accts[i]
 		}
 	}
 	return nil
@@ -244,7 +307,7 @@ func (s *Server) switchAccount(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	c := &http.Cookie{Name: acctCookie, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode}
 	id := q.Get("id")
-	for _, a := range s.accounts {
+	for _, a := range s.accts() {
 		if strings.EqualFold(a.RiotID, id) {
 			c.Value, c.MaxAge = a.RiotID, 365*24*3600
 		}

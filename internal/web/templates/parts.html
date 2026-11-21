@@ -4,7 +4,7 @@
      with .Wait the response to the last poll reloads the page. */}}
 {{define "sync"}}
 <span id="sync" class="sync"{{if .Syncing}} hx-get="/sync{{if .Wait}}?wait=1{{end}}" hx-trigger="every 1s" hx-swap="outerHTML"{{end}}>
-  {{if .Syncing}}<span class="pill live"><span class="spin"></span>Syncing…</span>
+  {{if .Syncing}}<span class="btn syncing" role="status" title="{{if .Stage}}{{.Stage}}{{else}}Checking the Riot API for new games{{end}}"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg><span>Syncing{{if .Total}} {{.Done}}/{{.Total}}{{else}}…{{end}}</span></span>
   {{else if .CanRefresh}}<button type="button" class="btn" hx-post="/sync" hx-target="#sync" hx-swap="outerHTML" title="Check the Riot API for new games now (last sync {{ago .LastSync}})"><svg class="i"><use href="#i-refresh"/></svg><span>Refresh</span></button>
   {{end}}
 </span>

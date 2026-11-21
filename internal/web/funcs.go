@@ -117,7 +117,7 @@ var funcs = template.FuncMap{
 	},
 	// lpWidth is LP as a bar width, full at 100 (Master+ can go past).
 	"lpWidth": func(lp int) string { return fmt.Sprintf("%d%%", max(0, min(lp, 100))) },
-	"lower": strings.ToLower,
+	"lower":   strings.ToLower,
 	// ordinal is 1st, 2nd, 3rd, 4th... (places in a lobby of ten).
 	"ordinal": func(n int) string {
 		suffix := "th"

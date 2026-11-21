@@ -1,0 +1,19 @@
+{{define "content"}}
+<section class="card forging">
+  <p class="eyebrow">First sync</p>
+  <h1>Forging your archive</h1>
+  {{template "progress" .Status}}
+  <p class="note">Draftsmith is pulling every ranked game Riot still has for you, about two seconds a game on a personal or development key. Leave it running: this page turns into your dashboard when it's done. If you close Draftsmith, the next start picks up where it stopped. The tier list and champ select work in the meantime.</p>
+</section>
+{{end}}
+
+{{/* The first sync's progress, polled until it's done; the last poll
+     reloads the page into the dashboard. */}}
+{{define "progress"}}
+<div id="progress" class="forge-progress" hx-get="/first-sync" hx-trigger="every 2s" hx-swap="outerHTML">
+  <p class="forge-stage">{{if .Stage}}{{.Stage}}{{else if .LastError}}Sync stopped{{else}}Starting…{{end}}</p>
+  <div class="forge-bar{{if not .Total}} idle{{end}}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{.Percent}}"><span style="width: {{.Percent}}%"></span></div>
+  <p class="forge-count">{{if .Total}}<strong>{{.Done}}</strong> of {{.Total}} games{{with .Left}} · {{.}}{{end}}{{else}}&nbsp;{{end}}</p>
+  {{if and .LastError (not .Syncing)}}<p class="set-msg neg" role="alert">{{.LastError}} <a href="/settings">Check your settings</a>.</p>{{end}}
+</div>
+{{end}}

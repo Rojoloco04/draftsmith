@@ -2,12 +2,20 @@
 
 Personal ranked League of Legends stats from your own match archive. It pulls your ranked games from the Riot API, keeps the raw JSON locally so nothing is lost when Riot ages it out, and builds a report and a local dashboard on your roles, champion pool, laning, early deaths, and how you convert leads.
 
-One dependency: `modernc.org/sqlite` (pure Go, no cgo) for the dashboard's index.
+Pure Go, no cgo. Dependencies: `modernc.org/sqlite` for the dashboard's index, and `go-webview2` with `golang.org/x/sys` for the app and overlay windows on Windows.
 
-## Setup
+## Quick start (Windows, no Go needed)
+
+1. Download `draftsmith.exe` from the [latest release](https://github.com/rojoloco04/draftsmith/releases/latest) and put it in a folder of its own (it keeps its settings and your archive next to itself).
+2. Double-click it. Windows SmartScreen may warn about an unrecognized app the first time: **More info**, then **Run anyway**.
+3. Draftsmith opens on its Settings page. Paste a Riot API key (sign in at [developer.riotgames.com](https://developer.riotgames.com) and copy the development key), then add your Riot ID. Your ranked history starts syncing right away and the dashboard fills in when it's done.
+
+A development key expires every 24 hours. When it does, every page says so; paste a fresh one in Settings. Register a personal app on the same site for a key that lasts.
+
+## Setup from source
 
 1. Get a key at [developer.riotgames.com](https://developer.riotgames.com). A dev key works right away but expires every 24 hours. Register a personal app for a key that doesn't expire (same rate limits: 20 req/s, 100 req/2 min).
-2. Copy `.env.example` to `.env` and fill it in, or set the same variables in your shell.
+2. Copy `.env.example` to `.env` and fill it in, set the same variables in your shell, or start the app and use its Settings page.
 3. Build:
 
 ```sh
@@ -32,11 +40,17 @@ Flags worth knowing:
 - `--max N` caps how many new games one run fetches
 - `--platform euw1` etc. if you're not on NA
 
+Several accounts can share one archive: run `draftsmith sync --riot-id "Name#TAG"` once per account to add it. After that, `sync` and `serve` keep every tracked account up to date, and the dashboard can switch between them or show them together.
+
 ### Dashboard
 
-Run `draftsmith` with no arguments (or double-click `draftsmith.exe`) on the PC you play on and everything is on: the dashboard at http://127.0.0.1:8080, opened in your browser, background sync, the live champ select page, the overlay beside the League client, and the in-game build. It finds `.env` and `data/` next to the exe if they aren't in the current folder. When the exe sits in its source checkout and Go is on PATH, it first runs `go build` over itself (about a second when nothing changed) and, if the code changed, restarts as the new build; a compile error is shown and the existing build runs anyway. If it can't start, the window stays open with the error until you press Enter. For a desktop shortcut, point it at `draftsmith.exe` and use `cmd/draftsmith/winres/icon.ico` (the dashboard's logo) as its icon.
+Run `draftsmith` with no arguments (or double-click `draftsmith.exe`) on the PC you play on and Draftsmith opens as a desktop app: the dashboard in its own window, background sync, the live champ select page, the overlay beside the League client, and the in-game build. Closing the window quits it. The dashboard is still served on http://127.0.0.1:8080 underneath, so a browser tab works too, and a second double-click while it runs just opens another window. It finds `.env` and `data/` next to the exe if they aren't in the current folder. A double-click hides the console and logs to `data/draftsmith.log`; started from a terminal, the log stays in the terminal. If the WebView2 runtime is missing (it ships with Windows 10 and 11), it opens the dashboard in your browser instead. If it can't start at all, it says why in a message box.
 
-`draftsmith serve` is the same without opening the browser, and takes flags to turn things off:
+When the exe sits in its source checkout and Go is on PATH, it first runs `go build` over itself (about a second when nothing changed) and, if the code changed, restarts as the new build; a compile error is logged and the existing build runs anyway. For a desktop shortcut, point it at `draftsmith.exe` and use `cmd/draftsmith/winres/icon.ico` (the dashboard's logo) as its icon; the app window uses the same logo.
+
+The **Settings** page (the gear in the header) holds the Riot API key (checked with Riot before it's saved, and only its last four characters shown after), the region, which ranked queues to sync, whether to show the overlay, and the tracked accounts: add one by Riot ID or remove one (its games stay on disk, so adding it back doesn't refetch them). It writes them to `.env`. Settings can only be changed from the PC Draftsmith runs on, not over Tailscale. With no account yet, the archive pages send you there, and while an account's first games sync they show a progress page instead of an empty dashboard.
+
+`draftsmith serve` is the same without the app window (`--app` adds it, `--open` opens the browser instead), and takes flags to turn things off:
 
 ```sh
 draftsmith serve --addr 100.x.y.z:8080     # bind your Tailscale IP to open it from your phone
@@ -47,11 +61,11 @@ draftsmith serve --no-overlay              # champ select page only, no window b
 draftsmith reindex                         # rebuild data/draftsmith.db from the archive
 ```
 
-Pages: an overview (rank banner with headline numbers, rank history, your last 20 games, and your champion pool plotted by games and adjusted win rate), match history with role and champion filters, a match page (both teams' stats with an DS score for every player, your gold and CS against your lane opponent, where you died), per-champion stats with matchups and your roles, and an OP.GG tier list.
+Pages: an overview (rank banner with headline numbers, rank history, your last 20 games, and your champion pool plotted by games and adjusted win rate), match history with role and champion filters, a match page (both teams' stats with a DS score for every player, your gold and CS against your lane opponent, where you died), per-champion stats with matchups and your roles, and an OP.GG tier list.
 
 The **DS score** rates every player in a match from 0 to 10 against the other nine: KDA, kill participation, damage share, gold per minute, gold lead over the lane opponent, CS per minute, vision per minute and deaths per minute, each compared with the lobby and weighted by role (supports aren't judged on CS), plus a small bump for the winning team. The best player on the winning team is the **MVP** and the best on the losing team the **SVP**. Match history shows yours next to the champion; the match page shows all ten.
 
-Background sync checks for new games every 25 minutes. To pick up a game you just finished, press **Refresh** in the header: it syncs right away and reloads the page when it's done.
+Background sync checks for new games every 25 minutes. To pick up a game you just finished, press **Refresh** in the header: it shows a count of the games it's fetching, syncs right away and reloads the page when it's done.
 
 OP.GG data (Emerald+, current patch) shows up in three places: the tier list page, with your own record next to each champion; a "your pool vs the meta" card and a meta tier column on the champions page; and an OP.GG card on each champion page with its tier, rates, and best and worst matchups, next to your record against those champions. Responses are cached in `data/draftsmith.db` and refreshed daily. If OP.GG is unreachable, the last copy is shown with its age.
 
@@ -115,16 +129,20 @@ internal/db         SQLite index over the archive for the dashboard
 internal/web        dashboard handlers, templates, SVG charts, static files (embedded)
 internal/opgg       MCP client for OP.GG, and the parser for its class notation
 internal/meta       typed, cached OP.GG calls (tier list, champion analysis) and the pool-vs-meta join
+internal/lcu        League client's local API: discovery, champ select, rune page import
+internal/watch      follows the client's gameflow and champ select
+internal/draft      enemy lane guesses, team comp, and pick suggestions from your pool
+internal/liveclient in-game Live Client Data API (your champion's level and items)
+internal/overlay    WebView2 window docked beside the League client (Windows)
+internal/appwin     the desktop app's own window around the dashboard (Windows)
 internal/fixture    synthetic match/timeline JSON (and one scrubbed real game) for tests
 ```
 
 ## Roadmap
 
 - `sample`: crawl games from players in your tier to build real benchmarks (CS diff, vision, early deaths) for your role and elo, so the report can say "below your bracket" instead of only "below your own average"
-- Death position heatmap across games
-- LLM writeup over `export` output
 - Quartermaster integration: post-game report in Discord
 
 ## Riot policy
 
-Personal keys are for you and a small private group. Don't host this publicly without a production key.
+Personal keys are for you and a small private group. Don't host this publicly without a production key. Shared with friends, each person runs their own copy with their own key; don't hand out yours.

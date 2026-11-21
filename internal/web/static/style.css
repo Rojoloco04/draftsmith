@@ -161,7 +161,7 @@ header.top {
   .who-text { display: none; }
   .who { padding: 4px; }
   .acct-menu summary.who { padding: 4px 6px; }
-  .btn span { display: none; }
+  header .btn span { display: none; }
   .nav { justify-content: space-between; }
   .nav a { padding: 8px 10px; }
   .nav a:not([aria-current]) span { display: none; }
@@ -513,7 +513,7 @@ td.items img, td.items .slot { margin-right: 3px; }
 .fresh.stale { color: var(--neg); }
 .fresh.stale .dot { background: var(--neg); box-shadow: 0 0 0 3px color-mix(in srgb, var(--neg) 20%, transparent); }
 .tierb { display: inline-block; min-width: 30px; text-align: center; font-size: .68rem; font-weight: 800; letter-spacing: .02em; padding: 2px 7px; border-radius: 6px; color: #fff; background: #8a94a6; }
-.tierb.t1 { background: linear-gradient(135deg, #f4b740, #e7802f); }
+.tierb.t1 { background: linear-gradient(135deg, #ff8a3d, #d9381e); }
 .tierb.t2 { background: var(--accent); }
 .tierb.t3 { background: var(--pos); }
 .tierb.t4 { background: #8a94a6; }
@@ -737,3 +737,60 @@ header.top { background: linear-gradient(var(--header-a), var(--header-b)); bord
 .pool .q-label { font-family: var(--serif); }
 .tip { border-radius: 0; border-color: var(--gold-line); }
 .ov-bar span { font-family: var(--serif); text-transform: uppercase; letter-spacing: .12em; color: var(--heading); }
+
+/* Header controls: settings, and the sync control while a sync runs (a
+   forge-lit button, its icon turning, a gold sheen along the bottom). */
+.btn-icon { padding: 7px 9px; }
+.btn-icon[aria-current] { color: var(--heading); border-color: var(--gold); }
+.btn.syncing { cursor: default; position: relative; overflow: hidden; color: var(--heading); border-color: var(--gold);
+  background: linear-gradient(180deg, var(--surface), var(--surface-2)); font-variant-numeric: tabular-nums; }
+.btn.syncing svg.i { color: var(--gold); animation: spin 1.4s linear infinite; }
+.btn.syncing::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent) no-repeat; background-size: 50% 100%;
+  animation: sheen 1.6s ease-in-out infinite; }
+@keyframes sheen { from { background-position: -100% 0; } to { background-position: 200% 0; } }
+.btn.primary { color: var(--heading); border-color: var(--gold);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 20%, var(--surface)), var(--surface)); }
+.btn:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+.btn-quiet { padding: 5px 10px; font-size: .78rem; background: transparent; }
+.when-busy { display: none; }
+.htmx-request .when-busy { display: inline; }
+.htmx-request .when-idle { display: none; }
+.alert { border: 1px solid var(--loss); border-left-width: 3px; background: var(--loss-soft); padding: 10px 14px; margin: 0 0 16px; font-size: .88rem; }
+
+/* Settings. */
+.settings { max-width: 760px; }
+.set-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.set-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 260px; min-width: 0; font-size: .72rem; font-weight: 650;
+  color: var(--muted); text-transform: uppercase; letter-spacing: .12em; }
+.set-field input, .set-field select { font: inherit; font-size: .9rem; font-weight: 500; text-transform: none; letter-spacing: 0;
+  color: var(--text); background: var(--surface-2); border: 1px solid var(--gold-line); border-radius: 0; padding: 8px 12px; width: 100%; min-width: 0; }
+.set-field input:focus, .set-field select:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px var(--accent-soft); }
+.set-field input:disabled, .set-field select:disabled { opacity: .55; }
+.set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; align-items: end; }
+.set-check { display: flex; gap: 10px; align-items: center; grid-column: 1 / -1; font-size: .88rem; }
+.set-check input { accent-color: var(--gold); width: 16px; height: 16px; flex: none; }
+.set-msg { margin: 10px 0 0; font-size: .86rem; font-weight: 600; }
+.set-accounts { list-style: none; margin: 0 0 14px; padding: 0; }
+.set-accounts li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.set-accounts li:first-child { border-top: 1px solid var(--line); }
+.set-accounts .muted { font-size: .8rem; }
+.set-welcome h2 { margin: 4px 0 0; }
+.set-steps { margin: 10px 0 0; padding-left: 1.3em; display: grid; gap: 6px; }
+.set-steps li.done { color: var(--muted); text-decoration: line-through; }
+
+/* First sync: the archive being forged, a bar filling with molten gold. */
+.forging { max-width: 680px; margin: 24px auto; text-align: center; padding: 32px 28px; }
+.forging h1 { margin: 6px 0 22px; }
+.forge-stage { font-family: var(--serif); text-transform: uppercase; letter-spacing: .1em; color: var(--gold); font-size: .82rem; margin: 0 0 10px; }
+.forge-bar { height: 10px; background: var(--surface-3); border: 1px solid var(--gold-line); overflow: hidden; }
+.forge-bar span { display: block; height: 100%; background: linear-gradient(90deg, #8a4b16, var(--gold), #ffe3a3);
+  box-shadow: 0 0 12px var(--gold); transition: width .6s ease; }
+.forge-bar.idle span { width: 30% !important; animation: forge-idle 1.4s ease-in-out infinite alternate; }
+@keyframes forge-idle { from { transform: translateX(-100%); } to { transform: translateX(333%); } }
+.forge-count { margin: 10px 0 0; font-variant-numeric: tabular-nums; color: var(--muted); }
+.forge-count strong { color: var(--heading); }
+@media (prefers-reduced-motion: reduce) {
+  .btn.syncing svg.i, .btn.syncing::after, .forge-bar.idle span { animation: none; }
+}
+.settings .note { overflow-wrap: anywhere; }

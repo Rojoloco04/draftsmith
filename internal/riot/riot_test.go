@@ -115,3 +115,11 @@ func TestRegionFor(t *testing.T) {
 		t.Fatal("unknown platform accepted")
 	}
 }
+
+func TestPlatformsAllRouted(t *testing.T) {
+	for _, p := range Platforms {
+		if _, ok := RegionFor(p.ID); !ok {
+			t.Errorf("%s is in Platforms but RegionFor doesn't know it", p.ID)
+		}
+	}
+}
