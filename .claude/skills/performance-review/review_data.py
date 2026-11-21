@@ -1,7 +1,7 @@
 """Pull the numbers for a Draftsmith performance review.
 
 Reads the dashboard's SQLite index (data/draftsmith.db) read-only and
-prints markdown tables: results, roles, champions, laning, OP score,
+prints markdown tables: results, roles, champions, laning, DS score,
 deaths by game phase and map zone, and lane matchups. Prints no PUUIDs
 or Riot IDs (the index holds none for other players anyway).
 
@@ -94,7 +94,7 @@ def main():
         where.append("g.role = ?")
         args.append(a.role.upper())
     games = db.execute(
-        f"""SELECT g.*, p.team_id, p.op_score, p.op_rank, p.award
+        f"""SELECT g.*, p.team_id, p.ds_score, p.ds_rank, p.award
             FROM games g LEFT JOIN participants p ON p.match_id = g.match_id AND p.me = 1
             WHERE {' AND '.join(where)} ORDER BY g.start_ms""", args).fetchall()
     if a.last:
@@ -122,9 +122,9 @@ def main():
                 num(avg([g["cs_per_min"] for g in gs])), pct(avg([g["kill_participation"] for g in gs])),
                 pct(avg([g["damage_share"] for g in gs])), num(avg([g["vision_per_min"] for g in gs]), 2),
                 num(avg([g["deaths_before_15"] for g in tl])), num(avg([g["deaths_enemy_side"] for g in tl])),
-                num(avg([g["op_score"] for g in gs if g["op_rank"]]))]
+                num(avg([g["ds_score"] for g in gs if g["ds_rank"]]))]
 
-    head = ["Games", "W-L", "WR", "KDA", "CS/m", "KP", "Dmg share", "Vision/m", "Deaths <15", "Deaths enemy half", "OP"]
+    head = ["Games", "W-L", "WR", "KDA", "CS/m", "KP", "Dmg share", "Vision/m", "Deaths <15", "Deaths enemy half", "DS"]
     print("## Overall\n")
     rows = [["All"] + summary(games)]
     if n >= 30:
@@ -147,17 +147,17 @@ def main():
         return sorted(out, key=lambda r: (-len(r[1]), r[0]))
 
     print("## Roles\n")
-    print(table(["Role", "Games", "W-L", "WR", "Adj. WR", "OP", "Gold @15 diff", "CS @10 diff"],
+    print(table(["Role", "Games", "W-L", "WR", "Adj. WR", "DS", "Gold @15 diff", "CS @10 diff"],
                 [[k or "?", len(v), f"{sum(g['win'] for g in v)}-{len(v) - sum(g['win'] for g in v)}",
-                  pct(sum(g["win"] for g in v) / len(v)), pct(adj), num(avg([g["op_score"] for g in v if g["op_rank"]])),
+                  pct(sum(g["win"] for g in v) / len(v)), pct(adj), num(avg([g["ds_score"] for g in v if g["ds_rank"]])),
                   num(avg([g["at15_gold_diff"] for g in v if g["at15_has_opp"]]), 0),
                   num(avg([g["at10_cs_diff"] for g in v if g["at10_has_opp"]]))] for k, v, adj in groups(lambda g: g["role"])]) + "\n")
 
     print(f"## Champions\n\nAdjusted WR = (wins + {PRIOR} x {pct(base)}) / (games + {PRIOR}).\n")
-    print(table(["Champion", "Games", "W-L", "Adj. WR", "KDA", "CS/m", "OP", "Gold @15 diff", "Last played"],
+    print(table(["Champion", "Games", "W-L", "Adj. WR", "KDA", "CS/m", "DS", "Gold @15 diff", "Last played"],
                 [[k, len(v), f"{sum(g['win'] for g in v)}-{len(v) - sum(g['win'] for g in v)}", pct(adj),
                   f"{(sum(g['kills'] + g['assists'] for g in v)) / max(1, sum(g['deaths'] for g in v)):.2f}",
-                  num(avg([g["cs_per_min"] for g in v])), num(avg([g["op_score"] for g in v if g["op_rank"]])),
+                  num(avg([g["cs_per_min"] for g in v])), num(avg([g["ds_score"] for g in v if g["ds_rank"]])),
                   num(avg([g["at15_gold_diff"] for g in v if g["at15_has_opp"]]), 0),
                   datetime.fromtimestamp(v[-1]["start_ms"] / 1000).date()] for k, v, adj in groups(lambda g: g["champion"])]) + "\n")
 
@@ -173,13 +173,13 @@ def main():
     print(f"Average @10: gold {num(avg([g['at10_gold_diff'] for g in lane]), 0)}, CS {num(avg([g['at10_cs_diff'] for g in lane]))}, "
           f"XP {num(avg([g['at10_xp_diff'] for g in lane]), 0)} over {len(lane)} games with a lane opponent.\n")
 
-    print("## OP score (0-10 against the lobby; MVP best winner, SVP best loser)\n")
-    scored = [g for g in games if g["op_rank"]]
+    print("## DS score (0-10 against the lobby; MVP best winner, SVP best loser)\n")
+    scored = [g for g in games if g["ds_rank"]]
     if scored:
         places = defaultdict(int)
         for g in scored:
-            places[g["op_rank"]] += 1
-        print(f"Average {num(avg([g['op_score'] for g in scored]))}, average place {num(avg([g['op_rank'] for g in scored]))}, "
+            places[g["ds_rank"]] += 1
+        print(f"Average {num(avg([g['ds_score'] for g in scored]))}, average place {num(avg([g['ds_rank'] for g in scored]))}, "
               f"MVP {sum(g['award'] == 'MVP' for g in scored)}, SVP {sum(g['award'] == 'SVP' for g in scored)} "
               f"of {len(scored)} games.\n")
         print(table(["Place"] + [str(i) for i in range(1, 11)], [["Games"] + [places[i] for i in range(1, 11)]]) + "\n")

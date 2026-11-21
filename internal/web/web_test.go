@@ -145,9 +145,9 @@ func TestMatchesAndFilters(t *testing.T) {
 	if n := strings.Count(body, `class="mrow`); n != pageSize {
 		t.Errorf("%d rows on page 1", n)
 	}
-	// Every non-remake row carries my OP score.
-	if n := strings.Count(body, `<span class="op" data-tip="OP score`); n != pageSize {
-		t.Errorf("%d rows with an OP score on page 1", n)
+	// Every non-remake row carries my DS score.
+	if n := strings.Count(body, `<span class="ds" data-tip="DS score`); n != pageSize {
+		t.Errorf("%d rows with an DS score on page 1", n)
 	}
 
 	_, body = get(t, ts, "/matches?queue=solo&page=2")
@@ -183,11 +183,11 @@ func TestMatchDetail(t *testing.T) {
 		"/img/spell/SummonerHaste.png", "/img/spell/SummonerFlash.png", "StormraidersSurgeRuneIcon2.png",
 		"perk-images/Styles/7201_Precision.png", "StatModsCDRScalingIcon.png",
 	)
-	// OP score for all ten players: one MVP and one SVP.
-	if n := strings.Count(body, `<span class="op" data-tip`); n != 10 {
-		t.Errorf("%d players with an OP score", n)
+	// DS score for all ten players: one MVP and one SVP.
+	if n := strings.Count(body, `<span class="ds" data-tip`); n != 10 {
+		t.Errorf("%d players with an DS score", n)
 	}
-	if strings.Count(body, `class="opb mvp">MVP<`) != 1 || strings.Count(body, `class="opb svp">SVP<`) != 1 {
+	if strings.Count(body, `class="dsb mvp">MVP<`) != 1 || strings.Count(body, `class="dsb svp">SVP<`) != 1 {
 		t.Error("want exactly one MVP and one SVP")
 	}
 	if n := strings.Count(body, "<tr class=\"me\">"); n != 1 {

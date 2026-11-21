@@ -5,7 +5,7 @@ import (
 	"sort"
 )
 
-// OP score: how well each player in a match did, 0 to 10, judged against
+// DS score: how well each player in a match did, 0 to 10, judged against
 // the other nine. Each stat below is turned into a z-score across the
 // lobby (how many standard deviations above or below the lobby's
 // average), the z-scores are summed with role weights, the winning team
@@ -13,24 +13,24 @@ import (
 // player on the winning team is the MVP, the best on the losing team the
 // SVP.
 
-// opStat is one input to the score, computed from a player's line.
-type opStat int
+// dsStat is one input to the score, computed from a player's line.
+type dsStat int
 
 const (
-	opKDA        opStat = iota // log(1 + (kills + assists) / max(1, deaths))
-	opKP                       // kill participation
-	opDamage                   // share of the team's champion damage
-	opGold                     // gold per minute
-	opLaneGold                 // gold lead over the lane opponent per minute
-	opCS                       // CS per minute
-	opVision                   // vision score per minute
-	opDeaths                   // deaths per minute (weighted negative)
-	opStatCount
+	dsKDA        dsStat = iota // log(1 + (kills + assists) / max(1, deaths))
+	dsKP                       // kill participation
+	dsDamage                   // share of the team's champion damage
+	dsGold                     // gold per minute
+	dsLaneGold                 // gold lead over the lane opponent per minute
+	dsCS                       // CS per minute
+	dsVision                   // vision score per minute
+	dsDeaths                   // deaths per minute (weighted negative)
+	dsStatCount
 )
 
-// opWeights by Riot position. Supports aren't judged on CS and junglers
+// dsWeights by Riot position. Supports aren't judged on CS and junglers
 // less so; supports lean on vision and kill participation instead.
-var opWeights = map[string][opStatCount]float64{
+var dsWeights = map[string][dsStatCount]float64{
 	"":        {.22, .15, .16, .10, .12, .10, .07, -.08},
 	"TOP":     {.22, .13, .17, .10, .14, .12, .05, -.08},
 	"JUNGLE":  {.22, .18, .14, .10, .10, .07, .10, -.08},
@@ -40,8 +40,8 @@ var opWeights = map[string][opStatCount]float64{
 }
 
 const (
-	opWinBonus = .25 // in z units, added for the winning team
-	opSpread   = 1.6 // score points per z unit
+	dsWinBonus = .25 // in z units, added for the winning team
+	dsSpread   = 1.6 // score points per z unit
 )
 
 // Awards.
@@ -50,11 +50,11 @@ const (
 	AwardSVP = "SVP" // best on the losing team
 )
 
-// ScorePlayers sets OPScore, OPRank (1 is best) and Award on every player
+// ScorePlayers sets DSScore, DSRank (1 is best) and Award on every player
 // of one match. minutes is the game length; remakes get no score.
 func ScorePlayers(ps []PlayerLine, minutes float64, remake bool) {
 	for i := range ps {
-		ps[i].OPScore, ps[i].OPRank, ps[i].Award = 0, 0, ""
+		ps[i].DSScore, ps[i].DSRank, ps[i].Award = 0, 0, ""
 	}
 	if remake || minutes <= 0 || len(ps) < 2 {
 		return
@@ -64,25 +64,25 @@ func ScorePlayers(ps []PlayerLine, minutes float64, remake bool) {
 		teamKills[p.TeamID] += p.Kills
 		teamDamage[p.TeamID] += p.Damage
 	}
-	stats := make([][opStatCount]float64, len(ps))
+	stats := make([][dsStatCount]float64, len(ps))
 	for i, p := range ps {
 		s := &stats[i]
-		s[opKDA] = math.Log1p(float64(p.Kills+p.Assists) / math.Max(1, float64(p.Deaths)))
-		s[opKP] = share(p.Kills+p.Assists, teamKills[p.TeamID])
-		s[opDamage] = share(p.Damage, teamDamage[p.TeamID])
-		s[opGold] = float64(p.Gold) / minutes
-		s[opCS] = float64(p.CS) / minutes
-		s[opVision] = float64(p.Vision) / minutes
-		s[opDeaths] = float64(p.Deaths) / minutes
+		s[dsKDA] = math.Log1p(float64(p.Kills+p.Assists) / math.Max(1, float64(p.Deaths)))
+		s[dsKP] = share(p.Kills+p.Assists, teamKills[p.TeamID])
+		s[dsDamage] = share(p.Damage, teamDamage[p.TeamID])
+		s[dsGold] = float64(p.Gold) / minutes
+		s[dsCS] = float64(p.CS) / minutes
+		s[dsVision] = float64(p.Vision) / minutes
+		s[dsDeaths] = float64(p.Deaths) / minutes
 		for _, o := range ps {
 			if o.TeamID != p.TeamID && o.Position == p.Position && p.Position != "" {
-				s[opLaneGold] = float64(p.Gold-o.Gold) / minutes
+				s[dsLaneGold] = float64(p.Gold-o.Gold) / minutes
 				break
 			}
 		}
 	}
-	var z [opStatCount][]float64
-	for k := opStat(0); k < opStatCount; k++ {
+	var z [dsStatCount][]float64
+	for k := dsStat(0); k < dsStatCount; k++ {
 		col := make([]float64, len(ps))
 		for i := range ps {
 			col[i] = stats[i][k]
@@ -91,17 +91,17 @@ func ScorePlayers(ps []PlayerLine, minutes float64, remake bool) {
 	}
 	raw := make([]float64, len(ps))
 	for i, p := range ps {
-		w, ok := opWeights[p.Position]
+		w, ok := dsWeights[p.Position]
 		if !ok {
-			w = opWeights[""]
+			w = dsWeights[""]
 		}
-		for k := opStat(0); k < opStatCount; k++ {
+		for k := dsStat(0); k < dsStatCount; k++ {
 			raw[i] += w[k] * z[k][i]
 		}
 		if p.Win {
-			raw[i] += opWinBonus
+			raw[i] += dsWinBonus
 		}
-		ps[i].OPScore = math.Round(math.Max(0, math.Min(10, 5+opSpread*raw[i]))*10) / 10
+		ps[i].DSScore = math.Round(math.Max(0, math.Min(10, 5+dsSpread*raw[i]))*10) / 10
 	}
 
 	order := make([]int, len(ps))
@@ -118,7 +118,7 @@ func ScorePlayers(ps []PlayerLine, minutes float64, remake bool) {
 	})
 	mvp, svp := false, false
 	for rank, i := range order {
-		ps[i].OPRank = rank + 1
+		ps[i].DSRank = rank + 1
 		switch {
 		case ps[i].Win && !mvp:
 			ps[i].Award, mvp = AwardMVP, true

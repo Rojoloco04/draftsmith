@@ -19,7 +19,7 @@ import (
 // SchemaVersion is stored in PRAGMA user_version. Bump it whenever the
 // schema or the derived values change; Open then drops and recreates every
 // table and the next Index rebuilds them from the archive.
-const SchemaVersion = 4 // 4: OP score per participant
+const SchemaVersion = 5 // 5: DS score per participant
 
 // FileName is the database file inside the data directory.
 const FileName = "draftsmith.db"
@@ -104,8 +104,8 @@ CREATE TABLE participants (
 	spells         TEXT NOT NULL, -- summoner1Id,summoner2Id
 	-- primary style, 4 primary runes, sub style, 2 sub runes, 3 shards
 	runes          TEXT NOT NULL,
-	op_score       REAL NOT NULL, -- analysis.ScorePlayers; 0 for remakes
-	op_rank        INTEGER NOT NULL,
+	ds_score       REAL NOT NULL, -- analysis.ScorePlayers; 0 for remakes
+	ds_rank        INTEGER NOT NULL,
 	award          TEXT NOT NULL, -- MVP, SVP or empty
 	PRIMARY KEY (match_id, participant_id)
 );

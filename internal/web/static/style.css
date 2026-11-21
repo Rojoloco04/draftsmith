@@ -452,8 +452,8 @@ td.items img, td.items .slot { margin-right: 3px; }
   .mrow > .m-stats { display: none; }
 }
 @media (max-width: 940px) {
-  .mrow { grid-template-columns: 88px minmax(0, 1fr) auto auto; grid-template-areas: "result champ op kda" "result items items lane"; row-gap: 8px; }
-  .m-op { grid-area: op; }
+  .mrow { grid-template-columns: 88px minmax(0, 1fr) auto auto; grid-template-areas: "result champ ds kda" "result items items lane"; row-gap: 8px; }
+  .m-ds { grid-area: ds; }
   .mrow > .m-opp { display: none; }
   .m-result { grid-area: result; }
   .m-champ { grid-area: champ; }
@@ -462,19 +462,19 @@ td.items img, td.items .slot { margin-right: 3px; }
   .m-lane { grid-area: lane; text-align: right; }
 }
 @media (max-width: 600px) {
-  .mrow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "result op" "champ kda" "items lane"; padding: 10px 12px 10px 16px; }
+  .mrow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "result ds" "champ kda" "items lane"; padding: 10px 12px 10px 16px; }
   .mrow > .m-result { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
   .mrow .loadout .runes { display: none; }
   .items img, .items .slot { width: 22px; height: 22px; }
 }
-/* OP score: MVP / SVP badge or place, with the 0-10 score */
-.op { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; min-width: 44px; }
-.opb { display: inline-block; min-width: 40px; padding: 2px 6px; text-align: center; font-size: .7rem; font-weight: 800; letter-spacing: .06em;
+/* DS score: MVP / SVP badge or place, with the 0-10 score */
+.ds { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; min-width: 44px; }
+.dsb { display: inline-block; min-width: 40px; padding: 2px 6px; text-align: center; font-size: .7rem; font-weight: 800; letter-spacing: .06em;
   border: 1px solid var(--line-strong); color: var(--muted); background: var(--surface-2); }
-.opb.mvp { color: #1a1206; border-color: var(--gold); background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 70%, #fff), var(--gold));
+.dsb.mvp { color: #1a1206; border-color: var(--gold); background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 70%, #fff), var(--gold));
   box-shadow: 0 0 10px color-mix(in srgb, var(--gold) 45%, transparent); }
-.opb.svp { color: #0d1220; border-color: #9aa6b8; background: linear-gradient(180deg, #e9eef5, #9aa6b8); }
-.op-score { font-size: .78rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.dsb.svp { color: #0d1220; border-color: #9aa6b8; background: linear-gradient(180deg, #e9eef5, #9aa6b8); }
+.ds-score { font-size: .78rem; font-weight: 650; font-variant-numeric: tabular-nums; }
 .pager { display: flex; justify-content: space-between; margin-bottom: 16px; }
 
 /* Match and champion heroes */
@@ -736,3 +736,4 @@ header.top { background: linear-gradient(var(--header-a), var(--header-b)); bord
 .icon { border-radius: 2px; box-shadow: 0 0 0 1px var(--gold-line); }
 .pool .q-label { font-family: var(--serif); }
 .tip { border-radius: 0; border-color: var(--gold-line); }
+.ov-bar span { font-family: var(--serif); text-transform: uppercase; letter-spacing: .12em; color: var(--heading); }

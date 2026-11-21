@@ -64,7 +64,7 @@
   <h2><span class="side-dot"></span>{{if .Mine}}My team{{else}}Enemy team{{end}} <span class="muted">{{.Name}} · {{if $.Game.Remake}}Remake{{else if .Win}}<span class="pos">Victory</span>{{else}}<span class="neg">Defeat</span>{{end}} · {{.Kills}} kills · {{thousands .Gold}} gold</span></h2>
   <div class="scroll">
   <table class="tbl players">
-    <thead><tr><th>Champion</th><th title="OP score: each player rated 0-10 against the lobby">OP</th><th class="r">KDA</th><th class="r">CS</th><th class="r">Gold</th><th>Damage</th><th class="r">Vision</th><th>Items</th></tr></thead>
+    <thead><tr><th>Champion</th><th title="DS score: each player rated 0-10 against the lobby">DS</th><th class="r">KDA</th><th class="r">CS</th><th class="r">Gold</th><th>Damage</th><th class="r">Vision</th><th>Items</th></tr></thead>
     <tbody>
     {{range .Players}}
       <tr {{if .Me}}class="me"{{end}}>
@@ -72,7 +72,7 @@
           <span class="cicon"><span class="icon" data-initials="{{initials .Champion}}"><img src="{{champImg .Champion $.Game.Patch}}" alt="" loading="lazy" width="36" height="36"></span><b class="lvl">{{.Level}}</b></span>
           {{template "loadout" (dict "Line" . "Patch" $.Game.Patch)}}
           <span class="pname"><strong>{{champ .Champion}}</strong>{{if .Me}} <span class="pill">me</span>{{end}}<br><span class="muted role-line">{{template "role" .Position}}{{role .Position}}</span></span></span></td>
-        <td>{{if .OPRank}}{{template "opScore" .}}{{end}}</td>
+        <td>{{if .DSRank}}{{template "dsScore" .}}{{end}}</td>
         <td class="r nowrap">{{.Kills}}/<span class="neg">{{.Deaths}}</span>/{{.Assists}}<br><span class="muted">{{kda .Kills .Deaths .Assists}}</span></td>
         <td class="r">{{.CS}}</td>
         <td class="r">{{thousands .Gold}}</td>

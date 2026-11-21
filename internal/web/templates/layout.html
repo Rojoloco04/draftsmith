@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <title>{{.Title}} · Draftsmith</title>
 <link rel="stylesheet" href="{{asset "style.css"}}">
-<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="icon" href="{{asset "icon.svg"}}" type="image/svg+xml">
 <script src="{{asset "htmx.min.js"}}" defer></script>
 <script src="{{asset "app.js"}}" defer></script>
 </head>
@@ -14,7 +14,7 @@
 {{template "sprite"}}
 <header class="top">
   <div class="wrap top-inner">
-    <a class="brand" href="/?queue={{.Queue.Key}}"><img src="/static/icon.svg" alt="" width="26" height="26"><span>Draftsmith</span></a>
+    <a class="brand" href="/?queue={{.Queue.Key}}"><img src="{{asset "icon.svg"}}" alt="" width="26" height="26"><span>Draftsmith</span></a>
     <nav class="nav" aria-label="Main">
       <a href="/?queue={{.Queue.Key}}" aria-label="Overview" data-nav="overview" {{if eq .Nav "overview"}}aria-current="page"{{end}}><svg class="i"><use href="#i-overview"/></svg><span>Overview</span></a>
       <a href="/matches?queue={{.Queue.Key}}" aria-label="Matches" data-nav="matches" {{if eq .Nav "matches"}}aria-current="page"{{end}}><svg class="i"><use href="#i-matches"/></svg><span>Matches</span></a>

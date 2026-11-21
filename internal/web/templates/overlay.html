@@ -9,13 +9,13 @@
 <meta name="color-scheme" content="light dark">
 <title>Overlay · Draftsmith</title>
 <link rel="stylesheet" href="{{asset "style.css"}}">
-<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="icon" href="{{asset "icon.svg"}}" type="image/svg+xml">
 <script src="{{asset "app.js"}}" defer></script>
 </head>
 <body class="overlay">
 {{template "sprite"}}
 <header class="ov-bar">
-  <img src="/static/icon.svg" alt="" width="16" height="16"><span>Draftsmith</span>
+  <img src="{{asset "icon.svg"}}" alt="" width="16" height="16"><span>Draftsmith</span>
   <button type="button" class="ov-hide" hidden title="Hide until the next champ select" aria-label="Hide until the next champ select">&times;</button>
 </header>
 <main id="cs" class="cs" data-stream="/champ-select/events">

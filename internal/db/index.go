@@ -184,11 +184,11 @@ func (d *DB) indexMatch(ctx context.Context, s *store.Store, id string, puuids [
 	}
 	for _, p := range det.Players {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO participants (match_id, participant_id, team_id, position, champion,
-			me, win, level, kills, deaths, assists, cs, gold, damage, vision, items, spells, runes, op_score, op_rank, award)
+			me, win, level, kills, deaths, assists, cs, gold, damage, vision, items, spells, runes, ds_score, ds_rank, award)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			id, p.ParticipantID, p.TeamID, p.Position, p.Champion, p.Me, p.Win, p.Level,
 			p.Kills, p.Deaths, p.Assists, p.CS, p.Gold, p.Damage, p.Vision,
-			joinInts(p.Items[:]), joinInts(p.Spells[:]), joinRunes(p.Runes), p.OPScore, p.OPRank, p.Award); err != nil {
+			joinInts(p.Items[:]), joinInts(p.Spells[:]), joinRunes(p.Runes), p.DSScore, p.DSRank, p.Award); err != nil {
 			return false, err
 		}
 	}

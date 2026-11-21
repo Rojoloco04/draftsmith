@@ -25,11 +25,11 @@ type PlayerLine struct {
 	// Spells are the two summoner spell ids (0 if unknown).
 	Spells [2]int `json:"spells"`
 	Runes  Runes  `json:"runes"`
-	// OPScore (0-10), OPRank (1-10, 1 is best) and Award (AwardMVP,
+	// DSScore (0-10), DSRank (1-10, 1 is best) and Award (AwardMVP,
 	// AwardSVP or "") rate the player against the lobby; see ScorePlayers.
 	// Zero for remakes.
-	OPScore float64 `json:"opScore"`
-	OPRank  int     `json:"opRank"`
+	DSScore float64 `json:"dsScore"`
+	DSRank  int     `json:"dsRank"`
 	Award   string  `json:"award,omitempty"`
 }
 

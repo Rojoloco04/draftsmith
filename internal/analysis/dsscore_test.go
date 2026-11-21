@@ -30,22 +30,22 @@ func TestScorePlayersAwards(t *testing.T) {
 	ps[5].Kills, ps[5].Deaths, ps[5].Assists = 0, 11, 1                        // red top has a rough game
 	ScorePlayers(ps, 30, false)
 
-	if ps[2].OPRank != 1 || ps[2].Award != AwardMVP {
-		t.Errorf("blue mid: rank %d award %q score %.1f", ps[2].OPRank, ps[2].Award, ps[2].OPScore)
+	if ps[2].DSRank != 1 || ps[2].Award != AwardMVP {
+		t.Errorf("blue mid: rank %d award %q score %.1f", ps[2].DSRank, ps[2].Award, ps[2].DSScore)
 	}
 	if ps[8].Award != AwardSVP {
-		t.Errorf("red bot should be SVP: rank %d award %q", ps[8].OPRank, ps[8].Award)
+		t.Errorf("red bot should be SVP: rank %d award %q", ps[8].DSRank, ps[8].Award)
 	}
-	if ps[5].OPRank != 10 {
-		t.Errorf("red top should be last, got rank %d (%.1f)", ps[5].OPRank, ps[5].OPScore)
+	if ps[5].DSRank != 10 {
+		t.Errorf("red top should be last, got rank %d (%.1f)", ps[5].DSRank, ps[5].DSScore)
 	}
 	ranks := map[int]bool{}
 	awards := map[string]int{}
 	for _, p := range ps {
-		if p.OPScore < 0 || p.OPScore > 10 {
-			t.Errorf("score %.1f out of range", p.OPScore)
+		if p.DSScore < 0 || p.DSScore > 10 {
+			t.Errorf("score %.1f out of range", p.DSScore)
 		}
-		ranks[p.OPRank] = true
+		ranks[p.DSRank] = true
 		awards[p.Award]++
 	}
 	if len(ranks) != 10 || ranks[0] {
@@ -63,15 +63,15 @@ func TestScorePlayersSupportNotJudgedOnCS(t *testing.T) {
 	b := lobby()
 	b[4].CS = 0
 	ScorePlayers(b, 30, false)
-	if a[4].OPScore != b[4].OPScore {
-		t.Errorf("support CS changed its score: %.1f vs %.1f", a[4].OPScore, b[4].OPScore)
+	if a[4].DSScore != b[4].DSScore {
+		t.Errorf("support CS changed its score: %.1f vs %.1f", a[4].DSScore, b[4].DSScore)
 	}
 	// A mid laner with less CS does score lower.
 	c := lobby()
 	c[2].CS = 100
 	ScorePlayers(c, 30, false)
-	if c[2].OPScore >= a[2].OPScore {
-		t.Errorf("mid CS should count: %.1f vs %.1f", c[2].OPScore, a[2].OPScore)
+	if c[2].DSScore >= a[2].DSScore {
+		t.Errorf("mid CS should count: %.1f vs %.1f", c[2].DSScore, a[2].DSScore)
 	}
 }
 
@@ -79,7 +79,7 @@ func TestScorePlayersRemake(t *testing.T) {
 	ps := lobby()
 	ScorePlayers(ps, 3, true)
 	for _, p := range ps {
-		if p.OPScore != 0 || p.OPRank != 0 || p.Award != "" {
+		if p.DSScore != 0 || p.DSRank != 0 || p.Award != "" {
 			t.Fatalf("remake scored: %+v", p)
 		}
 	}
@@ -93,7 +93,7 @@ func TestScorePlayersNoKills(t *testing.T) {
 	}
 	ScorePlayers(ps, 20, false)
 	for _, p := range ps {
-		if p.OPScore != p.OPScore || p.OPRank == 0 {
+		if p.DSScore != p.DSScore || p.DSRank == 0 {
 			t.Fatalf("bad score %+v", p)
 		}
 	}
@@ -109,7 +109,7 @@ func TestRealGameScored(t *testing.T) {
 	ranks := map[int]bool{}
 	for _, p := range d.Players {
 		awards[p.Award]++
-		ranks[p.OPRank] = true
+		ranks[p.DSRank] = true
 		if p.Award == AwardMVP && !p.Win || p.Award == AwardSVP && p.Win {
 			t.Errorf("%s award on the wrong team: %+v", p.Award, p)
 		}

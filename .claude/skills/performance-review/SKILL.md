@@ -23,7 +23,7 @@ python .claude/skills/performance-review/review_data.py --champion Vladimir --ro
 
 Flags: `--queue solo|flex|all`, `--last N`, `--since YYYY-MM-DD`, `--champion` (Riot id, e.g. `MonkeyKing`, `Kaisa`), `--role` (`TOP`, `JUNGLE`, `MIDDLE`, `BOTTOM`, `UTILITY`), `--data DIR`.
 
-It covers: overall numbers (with last 15 vs before, and wins vs losses), roles, champions with adjusted win rate, gold diff at 15 against results, laning diffs at 10, OP score and place distribution, deaths by game phase and named map zone (red side games turned around so my base is always bottom left), and lane matchups.
+It covers: overall numbers (with last 15 vs before, and wins vs losses), roles, champions with adjusted win rate, gold diff at 15 against results, laning diffs at 10, DS score and place distribution, deaths by game phase and named map zone (red side games turned around so my base is always bottom left), and lane matchups.
 
 If the index doesn't exist, the dashboard hasn't run yet: say so and stop. Don't run `draftsmith sync` (it calls the Riot API) unless I ask.
 
@@ -39,7 +39,7 @@ db = sqlite3.connect("file:data/draftsmith.db?mode=ro", uri=True)
 Tables (see `internal/db/db.go` for every column):
 
 - `games`: one row per game of mine. `win`, `champion`, `role`, `opponent` (lane opponent's champion), `minutes`, `kills`/`deaths`/`assists`, `cs_per_min`, `kill_participation`, `damage_share`, `vision_per_min`, `control_wards`, `at10_*`/`at15_*` (gold, cs, xp and their `_diff` vs the lane opponent, valid when `_has_opp` is 1), `deaths_before_15`, `deaths_enemy_side`, `queue` (420 solo, 440 flex), `remake`, `start_ms`. `account` is a PUUID: never print it.
-- `participants`: all ten players' end-of-game lines, champion and position only (`me` = 1 is me). `op_score` (0-10), `op_rank` (1-10), `award` (`MVP` best on the winning team, `SVP` best on the losing team).
+- `participants`: all ten players' end-of-game lines, champion and position only (`me` = 1 is me). `ds_score` (0-10), `ds_rank` (1-10), `award` (`MVP` best on the winning team, `SVP` best on the losing team).
 - `deaths`: my deaths with `minute`, `x`, `y` (0-14870; blue base bottom left; my side is `participants.team_id` 100 blue, 200 red).
 - `frames`: my and my lane opponent's gold, CS and XP each minute.
 - `rank_snapshots`: one row per account per day (`tier`, `division`, `lp`, `wins`, `losses`).
@@ -61,6 +61,6 @@ In the chat, not a file, unless I ask for one:
 
 - Small samples: under 5 games for a champion or matchup is anecdote, so say so. Lean on adjusted win rate, (wins + 10 x overall) / (games + 10), the dashboard's measure.
 - Compare me with myself (wins vs losses, recent vs before, role vs role). There's no elo benchmark data, so don't claim what's normal for my rank as if it were measured.
-- OP score is Draftsmith's own rating against the lobby (`internal/analysis/opscore.go`), not OP.GG's. Use it for "how much did I matter", not as truth.
+- DS score is Draftsmith's own rating against the lobby (`internal/analysis/dsscore.go`), not OP.GG's. Use it for "how much did I matter", not as truth.
 - Read only. Never write to `data/` or change the archive.
 - Other players are champions and positions, nothing more. Don't look anyone up.

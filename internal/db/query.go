@@ -251,7 +251,7 @@ func (d *DB) Queues(ctx context.Context) ([]int, error) {
 }
 
 const playerColumns = `participant_id, team_id, position, champion, me, win, level,
-	kills, deaths, assists, cs, gold, damage, vision, items, spells, runes, op_score, op_rank, award`
+	kills, deaths, assists, cs, gold, damage, vision, items, spells, runes, ds_score, ds_rank, award`
 
 // scanPlayer reads playerColumns, after any lead columns into lead.
 func scanPlayer(rows *sql.Rows, lead ...any) (analysis.PlayerLine, error) {
@@ -259,7 +259,7 @@ func scanPlayer(rows *sql.Rows, lead ...any) (analysis.PlayerLine, error) {
 	var items, spells, runes string
 	dest := append(lead, &p.ParticipantID, &p.TeamID, &p.Position, &p.Champion, &p.Me, &p.Win, &p.Level,
 		&p.Kills, &p.Deaths, &p.Assists, &p.CS, &p.Gold, &p.Damage, &p.Vision, &items, &spells, &runes,
-		&p.OPScore, &p.OPRank, &p.Award)
+		&p.DSScore, &p.DSRank, &p.Award)
 	if err := rows.Scan(dest...); err != nil {
 		return p, err
 	}
