@@ -58,7 +58,7 @@ func TestChampSelectPage(t *testing.T) {
 
 	// Without a watcher the page says how to start one.
 	_, body := get(t, ts, "/champ-select")
-	expect(t, body, "serve --watch", "draftsmith watch")
+	expect(t, body, "--no-watch", "draftsmith watch")
 
 	srv.WatchStarted("")
 	srv.WatchPhase("Lobby")

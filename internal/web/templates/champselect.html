@@ -10,7 +10,7 @@
 {{if not .On}}
 <section class="card empty">
   <h1>Champ select</h1>
-  <p>This page follows the League client on the PC it runs on. Start the dashboard there with <code>draftsmith serve --watch</code>.</p>
+  <p>This page follows the League client on the PC it runs on. This dashboard was started with <code>--no-watch</code>; run <code>draftsmith</code> on that PC without it.</p>
   <p class="muted">For the same suggestions in a terminal, run <code>draftsmith watch</code>.</p>
 </section>
 {{else if .Game}}{{with .Game}}{{$p := .Pick}}{{$gp := .Patch}}{{$b := .Build}}

@@ -5,8 +5,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -33,6 +31,9 @@ const version = "0.1.0"
 const usage = `draftsmith: ranked League of Legends stats from your own match archive
 
 Usage:
+  draftsmith                          everything: the dashboard, background sync, champ
+                                      select, the overlay and the in-game build, opened
+                                      in your browser (same as double-clicking the exe)
   draftsmith sync    [flags]          archive ranked games (and today's rank) from the Riot API
   draftsmith serve   [flags]          run the dashboard (and sync in the background)
   draftsmith reindex [flags]          rebuild the dashboard's SQLite index from the archive
@@ -40,7 +41,7 @@ Usage:
   draftsmith export  [flags]          dump per-game features as JSON lines
   draftsmith watch   [flags]          follow the local League client (champ select helper)
   draftsmith meta tools [--schema]    list OP.GG's meta tools
-  draftsmith meta call <tool> [json]  call an OP.GG tool and cache the result
+  draftsmith meta call <tool> [json]  call an OP.GG tool and print the result
   draftsmith version
 
 Config comes from flags, environment variables, or a .env file in the
@@ -60,13 +61,23 @@ Run "draftsmith <command> -h" for command flags.
 `
 
 func main() {
-	loadDotEnv(".env")
-	if len(os.Args) < 2 {
-		fmt.Fprint(os.Stderr, usage)
-		os.Exit(2)
+	bare := len(os.Args) < 2
+	if bare {
+		useExeDir()
 	}
+	loadDotEnv(".env")
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+
+	if bare {
+		// No command: run everything, the way a double-click would want it.
+		if err := cmdServe(ctx, []string{"--open"}); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			waitForEnter()
+			os.Exit(1)
+		}
+		return
+	}
 
 	var err error
 	switch os.Args[1] {
@@ -527,7 +538,6 @@ func cmdMeta(ctx context.Context, args []string) error {
 
 	case "call":
 		fs := flag.NewFlagSet("meta call", flag.ExitOnError)
-		data := fs.String("data", env("DRAFTSMITH_DATA", "data"), "archive directory (results are cached under meta/)")
 		endpoint := fs.String("endpoint", opgg.DefaultEndpoint, "MCP endpoint")
 		fs.Parse(args[1:])
 		rest := fs.Args()
@@ -551,19 +561,6 @@ func cmdMeta(ctx context.Context, args []string) error {
 		if res.IsError {
 			return fmt.Errorf("tool %s returned an error", tool)
 		}
-		s, err := store.Open(*data)
-		if err != nil {
-			return err
-		}
-		sum := sha256.Sum256([]byte(tool + argJSON))
-		key := tool + "-" + hex.EncodeToString(sum[:])[:10]
-		cached, _ := json.MarshalIndent(map[string]any{
-			"tool": tool, "args": toolArgs, "fetchedAt": time.Now().UTC(), "result": res,
-		}, "", "  ")
-		if err := s.PutMeta(key, cached); err != nil {
-			return err
-		}
-		fmt.Fprintf(os.Stderr, "cached to %s\n", s.MetaPath(key))
 		return nil
 	}
 	return fmt.Errorf("unknown meta subcommand %q", args[0])
@@ -594,6 +591,30 @@ func oneLine(s string) string {
 		s = s[:157] + "..."
 	}
 	return s
+}
+
+// useExeDir moves to the executable's directory when .env and data/ aren't
+// in the current one, so the exe finds its config however it was started
+// (a shortcut, the Start menu, another folder's terminal).
+func useExeDir() {
+	if _, err := os.Stat(".env"); err == nil {
+		return
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	if exe, err = filepath.EvalSymlinks(exe); err != nil {
+		return
+	}
+	os.Chdir(filepath.Dir(exe))
+}
+
+// waitForEnter keeps a double-clicked console open so an error can be read
+// before the window closes.
+func waitForEnter() {
+	fmt.Fprint(os.Stderr, "\nPress Enter to close.")
+	bufio.NewReader(os.Stdin).ReadString('\n')
 }
 
 // loadDotEnv sets KEY=VALUE lines from path without overriding real env vars.

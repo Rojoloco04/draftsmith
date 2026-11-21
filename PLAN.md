@@ -34,16 +34,20 @@ Phase 3 was built on branch `phase3-watch` and merged into `main` on 2026-11-20 
 
 UI refresh (on `phase3-watch`, 2026-11-17): new stylesheet (sticky header with icon nav, splash-art heroes on the overview, champion and match pages, rounded champion icons), ranked emblem and crest from CommunityDragon (`raw.communitydragon.org`, added to the CSP's `img-src`), role glyphs drawn as an inline SVG sprite in `layout.html`, and summoner spells, keystone and secondary tree on every match row and player line. That needed `spells` and `runes` columns on `participants`, so `db.SchemaVersion` is 2 and the first `serve` after upgrading rebuilds the index. Rune 8230 is now "Stormraider's Surge" (was Phase Rush) in Data Dragon. Checked by hand against the real archive in dark and light mode and at ~500px wide (headless Chrome works for screenshots; headless Edge on this machine exits without writing one, and desktop Chrome can't go narrower than ~500px, so true phone width needs DevTools emulation).
 
-UI direction (from the user, 2026-11-17): they like the refresh as a baseline but want to "get crazier" later with something more innovative, not just a cleaner OP.GG clone. Ideas to bring to that session, none decided: a death heatmap across games on the rift, a champion pool "constellation" or matchup grid instead of tables, animated LP/form timelines, per-game story views (gold swing moments from the timeline), and a champ select page that feels like an overlay rather than a dashboard. Ask before committing to one; the user picks the direction.
+UI direction (from the user, 2026-11-17, sharpened 2026-11-20): they like the refresh as a baseline but want something bolder than a cleaner OP.GG clone. "Bold" means the visual design of the pages and interface: think outside the box and make it look cool and creative, not more stats. Picked 2026-11-20: a **death heatmap** across games on the rift and a **champion pool constellation**. Dropped: LP/form timelines and per-game story views.
 
 The dashboard's champ select page is done (2026-11-18, see "Champ select page" in the Phase 3 section): `serve --watch` runs the watcher in the same process and the page follows it over SSE. Checked live against a real ranked champ select.
 
 The overlay is built (2026-11-18, see "Overlay" in the Phase 3 section): `serve --overlay` docks a borderless WebView2 window beside the League client during champ select. The page is checked at 320px; the window's docking still needs a look in a real champ select.
 
-**Next up (asked by the user 2026-11-18, in this order):**
+**Next up (2026-11-20):** the death heatmap and the champion pool constellation, designed boldly (see UI direction). Then check the 2026-11-20 in-game features in a real game.
+
+One command (2026-11-20, asked by the user): `draftsmith` with no arguments (or a double-click on the exe) runs `serve --open` from the exe's folder when `.env` isn't in the current one, and on an error waits for Enter so the console can be read. `serve` now watches the client and docks the overlay by default; `--no-watch` and `--no-overlay` turn them off (`--watch` and `--overlay` are gone). `--open` opens the dashboard in the browser.
+
+Earlier (asked by the user 2026-11-18, in this order):
 
 1. ~~Summoner spell recommendations in champ select~~: done 2026-11-18, see "Spells and builds" in the Phase 3 section.
-2. ~~Multiple accounts~~: done 2026-11-18, see "Multiple accounts" below. `Rojoloco#SLU` is not added yet: that needs `draftsmith sync --riot-id Rojoloco#SLU` with the new build, after stopping any `serve` still running the old one (an old binary rewriting `state.json` would drop the account list).
+2. ~~Multiple accounts~~: done 2026-11-18, see "Multiple accounts" below. `Rojoloco#SLU` was added by the user (confirmed 2026-11-20).
 3. ~~Build recommendations in game~~: done 2026-11-18, see "In-game build" below. The user answered the overlay question on 2026-11-20: the dashboard is enough during the game; the overlay stays champ select only. The overlay's docking was checked in a real champ select and is right.
 
 Done 2026-11-20 (asked by the user, see "Full build, my hover, rune import, team comp, item tracking" below): the in-game card shows every build option, my hovered champion always gets a card with runes, an Import button puts a rune page in the client, team comp is in the score, and the in-game card tracks my items and level from the Live Client Data API. Not yet checked in a real game.
@@ -117,7 +121,7 @@ What shipped, and where it differs from the plan below:
 Follow-ups, none blocking:
 
 - Death heatmap across games (the per-game map exists; the `deaths` table is ready for an aggregate view).
-- Rate limit priority still waits for Phase 4 (step 6 below).
+- ~~Rate limit priority~~: not needed, Phase 4 is dropped.
 - Still to eyeball by hand: the report's numbers against OP.GG's site for a couple of games (carried over from Phase 0).
 
 Decided:
@@ -174,7 +178,7 @@ Left:
 
 - ~~Rune names and icons~~: done with the UI refresh (below). `internal/web/ddragon` embeds Data Dragon's `runesReforged.json` and `summoner.json`; the champion page's OP.GG card shows the most played rune page as icons.
 - `lol_get_lane_matchup_guide` isn't wrapped yet; Phase 3's matchup view is the first real use.
-- The `data/meta/*.json` files from `meta call` are only probes now; nothing reads them.
+- ~~The `data/meta/*.json` probe files~~: removed 2026-11-20. `meta call` only prints now; the store no longer creates `meta/`.
 
 Original plan:
 
@@ -257,20 +261,24 @@ Plan from here:
 - No League Classic data, ever.
 - Personal key means personal use: don't expose the dashboard publicly.
 
-## Phase 4: elo benchmarks (`draftsmith sample`)
+## Phase 4: elo benchmarks (`draftsmith sample`): dropped
+
+Dropped 2026-11-20: the user finds it overkill; OP.GG meta stats are enough. The original idea, kept for reference:
 
 - Low priority background job using only spare rate limit. Pull players from my tier and division via league-v4, a handful of recent ranked games each, with timelines.
 - Store aggregates only: per role, distributions (median, p25, p75) of CS diff at 10, gold diff at 15, vision/min, deaths before 15, KP, damage share. No per-player records kept.
 - A few thousand games is enough. Then the report and dashboard can say "below your bracket", not just "below your own average".
 
-## Phase 5: Quartermaster
+## Phase 5: Quartermaster: not planned
+
+Not planned (2026-11-20). Quartermaster runs on the same PC as League. The most the user might want, someday, is asking Quartermaster for League stats in their Discord server. That would be a read-only call to the dashboard's HTTP API, not a module. The original idea, kept for reference:
 
 - Post-game summary to Discord after each ranked game, weekly trend digest, `/draftsmith` slash command for current form.
 - Either Quartermaster calls Draftsmith's HTTP API, or Draftsmith becomes a Quartermaster module. Decide after Phase 1 is stable.
 
 ## Open decisions
 
-- **Does Quartermaster run on the same PC as League?** `serve` and `watch` are one process now (`serve --watch`); this only decides where Quartermaster lives.
+- ~~**Does Quartermaster run on the same PC as League?**~~: yes (2026-11-20). No integration planned; see Phase 5.
 - ~~**Storage for the dashboard**~~: resolved 2026-11-17, SQLite (`modernc.org/sqlite`) as a rebuildable index over the raw JSON archive. See Phase 1.
 - ~~**OP.GG tier filter**~~: resolved. The tier list is fixed at Emerald+ (fine for me); per-champion analysis accepts `tier` (e.g. `emerald_plus`, `master_plus`).
 - **Riot product approval**: personal key registered as "Draftsmith"; if Riot asks for changes, update this file.

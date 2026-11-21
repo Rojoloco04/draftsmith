@@ -68,7 +68,7 @@ func cmdWatch(ctx context.Context, args []string) error {
 	return w.Run(ctx)
 }
 
-// watchOpts are the settings `watch` and `serve --watch` share.
+// watchOpts are the settings `watch` and `serve` share.
 type watchOpts struct {
 	leagueDir string // "" for the standard install locations
 	poll      time.Duration

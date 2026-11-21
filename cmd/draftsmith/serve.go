@@ -10,6 +10,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -34,14 +36,14 @@ func cmdServe(ctx context.Context, args []string) error {
 	noTimelines := fs.Bool("no-timelines", false, "skip timelines when syncing")
 	noMeta := fs.Bool("no-meta", false, "don't fetch OP.GG meta data (tier list, champion analysis)")
 	opggEndpoint := fs.String("opgg-endpoint", opgg.DefaultEndpoint, "OP.GG MCP endpoint")
-	watchClient := fs.Bool("watch", false, "follow the League client on this PC and show champ select live on the dashboard")
-	leagueDir := fs.String("league-dir", env("DRAFTSMITH_LEAGUE_DIR", ""), "with --watch: League install directory (default: the standard install location)")
-	minGames := fs.Int("min-games", 2, "with --watch: suggest only champions with at least this many games in your lane")
-	showOverlay := fs.Bool("overlay", false, "with --watch (implied): show champ select in a window docked beside the League client (Windows)")
+	noWatch := fs.Bool("no-watch", false, "don't follow the League client (no champ select page, overlay or in-game build)")
+	leagueDir := fs.String("league-dir", env("DRAFTSMITH_LEAGUE_DIR", ""), "League install directory (default: the standard install location)")
+	minGames := fs.Int("min-games", 2, "champ select: suggest only champions with at least this many games in your lane")
+	noOverlay := fs.Bool("no-overlay", false, "don't dock the champ select window beside the League client")
+	open := fs.Bool("open", false, "open the dashboard in your browser once it's up")
 	fs.Parse(args)
-	if *showOverlay {
-		*watchClient = true
-	}
+	watchClient := !*noWatch
+	showOverlay := watchClient && !*noOverlay
 
 	if err := checkListenAddr(*addr); err != nil {
 		return err
@@ -128,10 +130,10 @@ func cmdServe(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if *watchClient {
+	if watchClient {
 		srv.WatchStarted("")
 		var ov *overlay.Overlay
-		if *showOverlay {
+		if showOverlay {
 			ov, err = overlay.Start(ctx, overlay.Options{URL: "http://" + ln.Addr().String() + "/overlay", Log: logger})
 			if err != nil {
 				logger.Printf("overlay off: %v", err)
@@ -198,6 +200,11 @@ func cmdServe(ctx context.Context, args []string) error {
 		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
 	logger.Printf("dashboard for %s at http://%s", st.RiotIDs(), ln.Addr())
+	if *open {
+		if err := openBrowser("http://" + ln.Addr().String()); err != nil {
+			logger.Printf("couldn't open a browser: %v", err)
+		}
+	}
 
 	if sy != nil {
 		// The Refresh button asks for a sync now. One request can wait;
@@ -268,6 +275,20 @@ func syncLoop(ctx context.Context, sy *syncer, d *db.DB, srv *web.Server, every 
 			t.Reset(every)
 		}
 	}
+}
+
+// openBrowser opens url in the default browser.
+func openBrowser(url string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	return cmd.Start()
 }
 
 // webAccounts lists the tracked accounts for the dashboard.

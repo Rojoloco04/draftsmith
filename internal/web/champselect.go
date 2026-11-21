@@ -132,7 +132,7 @@ func (s *Server) importRunesHandler(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 	switch {
 	case imp == nil:
-		http.Error(w, "Rune import needs serve --watch on the PC League runs on.", http.StatusConflict)
+		http.Error(w, "Rune import needs draftsmith running on the PC League runs on, without --no-watch.", http.StatusConflict)
 		return
 	case pick == nil || pick.RunesState != draft.RunesOK:
 		http.Error(w, "That rune page isn't on the board any more.", http.StatusNotFound)

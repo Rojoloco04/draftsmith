@@ -34,12 +34,16 @@ Flags worth knowing:
 
 ### Dashboard
 
+Run `draftsmith` with no arguments (or double-click `draftsmith.exe`) on the PC you play on and everything is on: the dashboard at http://127.0.0.1:8080, opened in your browser, background sync, the live champ select page, the overlay beside the League client, and the in-game build. It finds `.env` and `data/` next to the exe if they aren't in the current folder. If it can't start, the window stays open with the error until you press Enter.
+
+`draftsmith serve` is the same without opening the browser, and takes flags to turn things off:
+
 ```sh
-draftsmith serve                           # http://127.0.0.1:8080, syncs every 25 minutes
 draftsmith serve --addr 100.x.y.z:8080     # bind your Tailscale IP to open it from your phone
 draftsmith serve --no-sync                 # just browse the archive
 draftsmith serve --no-meta                 # don't call OP.GG
-draftsmith serve --watch                   # on the PC you play on: live champ select page
+draftsmith serve --no-watch                # don't follow the League client (e.g. on another PC)
+draftsmith serve --no-overlay              # champ select page only, no window beside the client
 draftsmith reindex                         # rebuild data/draftsmith.db from the archive
 ```
 
@@ -51,7 +55,7 @@ OP.GG data (Emerald+, current patch) shows up in three places: the tier list pag
 
 ### Champ select
 
-`draftsmith watch` follows the League client on the same PC (it reads the client's local API, which only listens on localhost) and, in champ select, logs the draft and suggestions from your pool. `serve --watch` does the same inside the dashboard: the **Champ select** page updates live over server-sent events with both teams, bans, each enemy's likely lane, your top three picks (estimated win rate from your record, OP.GG's win rate and the likely lane matchup) and OP.GG's rune page for each, or just your champion's once you lock in.
+`draftsmith watch` follows the League client on the same PC (it reads the client's local API, which only listens on localhost) and, in champ select, logs the draft and suggestions from your pool. `serve` does the same inside the dashboard: the **Champ select** page updates live over server-sent events with both teams, bans, each enemy's likely lane, your top three picks (estimated win rate from your record, OP.GG's win rate and the likely lane matchup) and OP.GG's rune page for each, or just your champion's once you lock in.
 
 Your own hover always gets a card, with its runes fetched ahead of everything else. Suggestions also weigh your team's comp: a pick that brings magic damage to a mostly AD team (or the reverse), or the team's first tank, scores a little higher, and the board shows your team's damage mix and frontline. Damage type and frontline come from Riot's champion classes in Data Dragon.
 
@@ -78,7 +82,7 @@ draftsmith meta tools --schema             # see what's available and each tool'
 draftsmith meta call lol_list_lane_meta_champions '{...args from the schema...}'
 ```
 
-`meta call` prints the raw response and saves it under `data/meta/`. The tool arguments aren't documented in OP.GG's README, so start with `meta tools --schema` to see them. Most tools answer in a positional "class" notation rather than JSON; `docs/opgg-tools.md` describes it and the quirks found so far.
+`meta call` prints the raw response; redirect it to a file to keep it. The tool arguments aren't documented in OP.GG's README, so start with `meta tools --schema` to see them. Most tools answer in a positional "class" notation rather than JSON; `docs/opgg-tools.md` describes it and the quirks found so far.
 
 ## What the report covers
 

@@ -226,7 +226,7 @@ func TestStubsStaticAndHeaders(t *testing.T) {
 	ts := newTestServer(t)
 	for _, p := range []string{"/champ-select"} {
 		code, body := get(t, ts, p)
-		if code != 200 || !strings.Contains(body, "serve --watch") {
+		if code != 200 || !strings.Contains(body, "--no-watch") {
 			t.Errorf("%s: %d", p, code)
 		}
 	}

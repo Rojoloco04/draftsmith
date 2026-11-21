@@ -97,7 +97,7 @@ type legacyState struct {
 }
 
 func Open(dir string) (*Store, error) {
-	for _, sub := range []string{"matches", "timelines", "ranks", "meta"} {
+	for _, sub := range []string{"matches", "timelines", "ranks"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			return nil, err
 		}
@@ -274,12 +274,6 @@ func (s *Store) RankSnapshotDays(puuid string) ([]string, error) {
 func (s *Store) LoadRankSnapshot(puuid, day string) ([]byte, error) {
 	return os.ReadFile(filepath.Join(s.ranksDir(puuid), safe(day)+".json"))
 }
-
-func (s *Store) MetaPath(key string) string {
-	return filepath.Join(s.Dir, "meta", safe(key)+".json")
-}
-
-func (s *Store) PutMeta(key string, b []byte) error { return writeAtomic(s.MetaPath(key), b) }
 
 func safe(id string) string {
 	return strings.Map(func(r rune) rune {

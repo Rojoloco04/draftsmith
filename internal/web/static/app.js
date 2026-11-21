@@ -12,7 +12,7 @@ document.addEventListener("error", function (e) {
   }
 }, true);
 
-// The overlay window (serve --overlay) binds draftsmithHide, which hides it
+// The overlay window docked by serve binds draftsmithHide, which hides it
 // until the next champ select. In a browser there's nothing to hide.
 (function () {
   var btn = document.querySelector(".ov-hide");
