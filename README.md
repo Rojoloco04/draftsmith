@@ -55,6 +55,10 @@ Background sync checks for new games every 25 minutes. To pick up a game you jus
 
 OP.GG data (Emerald+, current patch) shows up in three places: the tier list page, with your own record next to each champion; a "your pool vs the meta" card and a meta tier column on the champions page; and an OP.GG card on each champion page with its tier, rates, and best and worst matchups, next to your record against those champions. Responses are cached in `data/draftsmith.db` and refreshed daily. If OP.GG is unreachable, the last copy is shown with its age.
 
+### Performance review with Claude Code
+
+The repo ships a Claude Code skill, `.claude/skills/performance-review`. Open the repo in Claude Code and ask for a review ("how have my last 30 games gone?", "why do I keep losing on Vladimir?"). It reads `data/draftsmith.db` read-only through `review_data.py` (results, roles, champions, laning, OP score, deaths by game phase and map zone, matchups), digs into whatever stands out, and writes a short review with what's working, what's costing games, and one thing to focus on next. You can run the script yourself too: `python .claude/skills/performance-review/review_data.py --last 30`.
+
 ### Champ select
 
 `draftsmith watch` follows the League client on the same PC (it reads the client's local API, which only listens on localhost) and, in champ select, logs the draft and suggestions from your pool. `serve` does the same inside the dashboard: the **Champ select** page updates live over server-sent events with both teams, bans, each enemy's likely lane, your top three picks (estimated win rate from your record, OP.GG's win rate and the likely lane matchup) and OP.GG's rune page for each, or just your champion's once you lock in.

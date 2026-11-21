@@ -6,3 +6,4 @@ data/
 *.md.out
 report.md
 games.jsonl
+.claude/settings.local.json

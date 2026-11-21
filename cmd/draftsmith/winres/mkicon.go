@@ -1,8 +1,10 @@
 //go:build ignore
 
-// mkicon draws internal/web/static/icon.svg (a 32x32 rounded square with a
-// stroked "A") at several sizes and writes a PNG-compressed .ico plus a
-// 256px PNG. Regenerate after changing the logo, from cmd/draftsmith/winres:
+// mkicon draws internal/web/static/icon.svg (the Forge logo: a gold-rimmed
+// navy hexagon holding a gold anvil under a teal spark) at several sizes
+// and writes a PNG-compressed .ico plus a 256px PNG. The shapes below are
+// the SVG's polygons and gradients, in its 32-unit viewBox; keep them in
+// step. Regenerate after changing the logo, from cmd/draftsmith/winres:
 //
 //	go run mkicon.go icon.ico icon.png
 package main
@@ -17,38 +19,59 @@ import (
 	"os"
 )
 
-// The SVG, in its 32-unit viewBox.
-const (
-	rx     = 7.0
-	halfSW = 1.5 // stroke-width 3
-)
+type rgb struct{ r, g, b float64 }
 
-var bg = color.NRGBA{0x53, 0x83, 0xe8, 0xff}
-
-// Path segments: M9 23 L16 7 L23 23 M12 17 H20 (round caps and joins, so
-// the stroke is exactly the union of capsules around each segment).
-var segs = [][4]float64{{9, 23, 16, 7}, {16, 7, 23, 23}, {12, 17, 20, 17}}
-
-func inRoundRect(x, y float64) bool {
-	if x < 0 || y < 0 || x > 32 || y > 32 {
-		return false
-	}
-	cx := math.Max(rx, math.Min(32-rx, x))
-	cy := math.Max(rx, math.Min(32-rx, y))
-	return (x-cx)*(x-cx)+(y-cy)*(y-cy) <= rx*rx
+func hex(c uint32) rgb {
+	return rgb{float64(c >> 16 & 0xff), float64(c >> 8 & 0xff), float64(c & 0xff)}
 }
 
-func inStroke(x, y float64) bool {
-	for _, s := range segs {
-		dx, dy := s[2]-s[0], s[3]-s[1]
-		t := ((x-s[0])*dx + (y-s[1])*dy) / (dx*dx + dy*dy)
-		t = math.Max(0, math.Min(1, t))
-		px, py := s[0]+t*dx-x, s[1]+t*dy-y
-		if px*px+py*py <= halfSW*halfSW {
-			return true
+// shape is a filled polygon, painted in order (later on top). With top and
+// bottom set, its fill is a vertical gradient over its bounding box, like
+// the SVG's objectBoundingBox gradients.
+type shape struct {
+	pts         [][2]float64
+	top, bottom rgb
+	gradient    bool
+}
+
+func poly(flat ...float64) [][2]float64 {
+	var p [][2]float64
+	for i := 0; i+1 < len(flat); i += 2 {
+		p = append(p, [2]float64{flat[i], flat[i+1]})
+	}
+	return p
+}
+
+var shapes = []shape{
+	{pts: poly(16, 0.5, 29.42, 8.25, 29.42, 23.75, 16, 31.5, 2.58, 23.75, 2.58, 8.25), top: hex(0xd6b46a)},
+	{pts: poly(16, 2.4, 27.78, 9.2, 27.78, 22.8, 16, 29.6, 4.22, 22.8, 4.22, 9.2), top: hex(0x16243d), bottom: hex(0x060b14), gradient: true},
+	{pts: poly(8, 13.4, 12, 12.6, 24, 12.6, 24, 15.6, 21.2, 16.2, 20, 19.2, 22.6, 21.2, 22.6, 23.2, 9.4, 23.2, 9.4, 21.2, 12, 19.2, 12, 16.2, 10.6, 15.4),
+		top: hex(0xf3e2b0), bottom: hex(0xb38a3a), gradient: true},
+	{pts: poly(16, 4.8, 16.9, 7.3, 19.4, 8.2, 16.9, 9.1, 16, 11.6, 15.1, 9.1, 12.6, 8.2, 15.1, 7.3), top: hex(0x4fe0ec)},
+}
+
+// inside is the even-odd point-in-polygon test.
+func inside(pts [][2]float64, x, y float64) bool {
+	in := false
+	for i, j := 0, len(pts)-1; i < len(pts); j, i = i, i+1 {
+		a, b := pts[i], pts[j]
+		if (a[1] > y) != (b[1] > y) && x < (b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0] {
+			in = !in
 		}
 	}
-	return false
+	return in
+}
+
+func (s shape) color(y float64) rgb {
+	if !s.gradient {
+		return s.top
+	}
+	lo, hi := math.Inf(1), math.Inf(-1)
+	for _, p := range s.pts {
+		lo, hi = math.Min(lo, p[1]), math.Max(hi, p[1])
+	}
+	t := (y - lo) / (hi - lo)
+	return rgb{s.top.r + (s.bottom.r-s.top.r)*t, s.top.g + (s.bottom.g-s.top.g)*t, s.top.b + (s.bottom.b-s.top.b)*t}
 }
 
 func render(size int) *image.NRGBA {
@@ -57,27 +80,31 @@ func render(size int) *image.NRGBA {
 	scale := 32.0 / float64(size)
 	for py := 0; py < size; py++ {
 		for px := 0; px < size; px++ {
-			var cover, white float64
+			var sum rgb
+			var cover float64
 			for sy := 0; sy < ss; sy++ {
 				for sx := 0; sx < ss; sx++ {
 					x := (float64(px) + (float64(sx)+0.5)/ss) * scale
 					y := (float64(py) + (float64(sy)+0.5)/ss) * scale
-					if inRoundRect(x, y) {
-						cover++
-						if inStroke(x, y) {
-							white++
+					hit := -1
+					for i, s := range shapes {
+						if inside(s.pts, x, y) {
+							hit = i
 						}
 					}
+					if hit < 0 {
+						continue
+					}
+					c := shapes[hit].color(y)
+					sum.r, sum.g, sum.b = sum.r+c.r, sum.g+c.g, sum.b+c.b
+					cover++
 				}
 			}
 			if cover == 0 {
 				continue
 			}
-			// Colour of the covered part: blue mixed with white, then
-			// coverage as alpha.
-			w := white / cover
-			mix := func(c uint8) uint8 { return uint8(math.Round(float64(c)*(1-w) + 255*w)) }
-			img.SetNRGBA(px, py, color.NRGBA{mix(bg.R), mix(bg.G), mix(bg.B), uint8(math.Round(255 * cover / (ss * ss)))})
+			ch := func(v float64) uint8 { return uint8(math.Round(v / cover)) }
+			img.SetNRGBA(px, py, color.NRGBA{ch(sum.r), ch(sum.g), ch(sum.b), uint8(math.Round(255 * cover / (ss * ss)))})
 		}
 	}
 	return img
