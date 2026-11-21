@@ -60,9 +60,11 @@ type Live struct {
 	tables  map[string][]meta.Counter // key/position
 	runes   map[string]runeResult     // key/opponent/position
 	pending map[string]bool
-	queue   chan func()
-	last    view
-	lastB   string // last board's fingerprint
+	// queue holds background fetches; urgent ones (my own champion's rune
+	// page) go first.
+	queue, urgent chan func()
+	last          view
+	lastB         string // last board's fingerprint
 }
 
 // view is what Live shows for one champ select state: a header, and
@@ -131,12 +133,21 @@ func (l *Live) Start(ctx context.Context) {
 	l.runes = map[string]runeResult{}
 	l.pending = map[string]bool{}
 	l.queue = make(chan func(), 64)
+	l.urgent = make(chan func(), 16)
 	l.mu.Unlock()
 	go func() {
 		for {
 			select {
+			case f := <-l.urgent:
+				f()
+				continue
+			default:
+			}
+			select {
 			case <-ctx.Done():
 				return
+			case f := <-l.urgent:
+				f()
 			case f := <-l.queue:
 				f()
 			}
@@ -235,7 +246,16 @@ func (l *Live) render(s lcu.Session, at time.Time) (view, Board) {
 		return view{head: "suggestions: no OP.GG tier list: " + err.Error()}, b
 	}
 
-	var taken, hovered []string
+	var taken, hovered, allies []string
+	for _, m := range s.MyTeam {
+		if m.CellID == me.CellID {
+			continue
+		}
+		if id := pickOrHover(m); id != 0 {
+			allies = append(allies, l.key(id))
+		}
+	}
+	b.Comp = Comp(allies)
 	mine, theirs := s.BanList()
 	for _, id := range append(mine, theirs...) {
 		taken = append(taken, l.key(id))
@@ -256,7 +276,7 @@ func (l *Live) render(s lcu.Session, at time.Time) (view, Board) {
 	if me.ChampionID != 0 && s.Locked(me.CellID) {
 		champ := l.key(me.ChampionID)
 		sug := Suggest(Input{Position: position, Games: l.Games, Base: l.Base, TierList: tl, Odds: odds,
-			Matchups: l.tablesFor([]string{champ}, position)})
+			Matchups: l.tablesFor([]string{champ}, position), Allies: allies})
 		var forMe *Suggestion
 		for i := range sug {
 			if norm(sug[i].Champion) == norm(champ) {
@@ -270,7 +290,7 @@ func (l *Live) render(s lcu.Session, at time.Time) (view, Board) {
 			opp = likelyLaner(odds, position)
 		}
 		b.Locked = true
-		b.Picks = []Pick{l.pick(champ, forMe, position, opp)}
+		b.Picks = []Pick{l.pick(champ, forMe, position, opp, true)}
 		return view{
 			head:  fmt.Sprintf("locked in %s (%s)", l.name(champ), meta.PositionName(position)),
 			items: []viewItem{{name: l.name(champ), runes: l.runeLine(champ, opp, position) + l.buildLine(champ, opp, position)}},
@@ -284,10 +304,22 @@ func (l *Live) render(s lcu.Session, at time.Time) (view, Board) {
 			pool = append(pool, c)
 		}
 	}
+	// My hover (during my turn, or declared before it) gets a card of
+	// its own even when it isn't a top suggestion, so its runes show.
+	myHover := ""
+	if id := pickOrHover(me); id != 0 {
+		myHover = l.key(id)
+		if !gone[norm(myHover)] && !containsKey(pool, myHover) {
+			l.tablesFor([]string{myHover}, position)
+		}
+	}
 	sug := Suggest(Input{
 		Position: position, Games: l.Games, Base: l.Base, MinGames: l.MinGames, TierList: tl, Odds: odds,
-		Matchups: l.tablesFor(pool, position), Taken: taken, Hovered: hovered,
+		Matchups: l.tablesFor(pool, position), Taken: taken, Hovered: hovered, Allies: allies,
 	})
+	if myHover != "" {
+		b.Picks = append(b.Picks, l.hoverPick(myHover, sug, position, tl, odds, allies))
+	}
 	if len(sug) == 0 {
 		b.Note = fmt.Sprintf("None of your champions with %d+ games %s is still available.", max(l.MinGames, 1), meta.PositionName(position))
 		return view{head: fmt.Sprintf("suggestions (%s): none; no champion with %d+ games there is still available", meta.PositionName(position), max(l.MinGames, 1))}, b
@@ -299,7 +331,10 @@ func (l *Live) render(s lcu.Session, at time.Time) (view, Board) {
 		}
 		opp, _ := sg.LikelyOpponent(LikelyOdds)
 		v.items = append(v.items, viewItem{name: l.name(sg.Champion), reason: sg.Reason(position, l.Name), runes: l.runeLine(sg.Champion, opp, position)})
-		b.Picks = append(b.Picks, l.pick(sg.Champion, &sug[i], position, opp))
+		if myHover != "" && norm(sg.Champion) == norm(myHover) {
+			continue // already shown as my hover
+		}
+		b.Picks = append(b.Picks, l.pick(sg.Champion, &sug[i], position, opp, false))
 	}
 	return v, b
 }
@@ -307,7 +342,7 @@ func (l *Live) render(s lcu.Session, at time.Time) (view, Board) {
 // runeLine describes the rune page for champ into opp ("" if unknown),
 // queuing the fetch if it isn't here yet.
 func (l *Live) runeLine(champ, opp, position string) string {
-	r, ok := l.runeFor(champ, opp, position)
+	r, ok := l.runeFor(champ, opp, position, false)
 	if !ok {
 		return loadingRunes
 	}
@@ -333,14 +368,23 @@ func (l *Live) buildLine(champ, opp, position string) string {
 
 // runeFor returns the rune page for champ into opp, and whether it's
 // been fetched; if not, it queues the fetch.
-func (l *Live) runeFor(champ, opp, position string) (runeResult, bool) {
+func (l *Live) runeFor(champ, opp, position string, urgent bool) (runeResult, bool) {
 	l.mu.Lock()
 	r, ok := l.runes[champ+"/"+opp+"/"+position]
 	l.mu.Unlock()
 	if !ok {
-		l.fetchRunes(champ, opp, position)
+		l.fetchRunes(champ, opp, position, urgent)
 	}
 	return r, ok
+}
+
+// usualRunes is champ's usual page if it's already fetched, to show while
+// a matchup page loads.
+func (l *Live) usualRunes(champ, position string) (runeResult, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	r, ok := l.runes[champ+"//"+position]
+	return r, ok && r.ok
 }
 
 func (l *Live) tablesFor(champs []string, position string) map[string][]meta.Counter {
@@ -358,9 +402,27 @@ func (l *Live) tablesFor(champs []string, position string) map[string][]meta.Cou
 	return out
 }
 
+func containsKey(keys []string, k string) bool {
+	for _, x := range keys {
+		if norm(x) == norm(k) {
+			return true
+		}
+	}
+	return false
+}
+
+// pickOrHover is a member's champion: the pick or hover, else the pick
+// declared before their turn (0 for none).
+func pickOrHover(m lcu.Member) int {
+	if m.ChampionID != 0 {
+		return m.ChampionID
+	}
+	return m.ChampionPickIntent
+}
+
 func (l *Live) fetchTable(champ, position string) {
 	k := "table/" + champ + "/" + position
-	l.enqueue(k, func() {
+	l.enqueue(k, false, func() {
 		t, err := l.Meta.MatchupTable(l.ctx, champ, position)
 		if err != nil && !errors.Is(err, meta.ErrNoData) && l.ctx.Err() == nil {
 			l.Log.Printf("OP.GG matchups for %s %s: %v", l.name(champ), meta.PositionName(position), err)
@@ -371,9 +433,9 @@ func (l *Live) fetchTable(champ, position string) {
 	})
 }
 
-func (l *Live) fetchRunes(champ, opp, position string) {
+func (l *Live) fetchRunes(champ, opp, position string, urgent bool) {
 	k := "runes/" + champ + "/" + opp + "/" + position
-	l.enqueue(k, func() {
+	l.enqueue(k, urgent, func() {
 		r := runeResult{}
 		if opp != "" {
 			if m, err := l.Meta.Matchup(l.ctx, champ, opp, position); err == nil && len(m.Runes) > 0 {
@@ -394,8 +456,8 @@ func (l *Live) fetchRunes(champ, opp, position string) {
 }
 
 // enqueue runs f in the background once per key, then refreshes the
-// suggestions with what it fetched.
-func (l *Live) enqueue(key string, f func()) {
+// suggestions with what it fetched. Urgent jobs run before the rest.
+func (l *Live) enqueue(key string, urgent bool, f func()) {
 	l.mu.Lock()
 	if l.pending == nil || l.pending[key] {
 		l.mu.Unlock()
@@ -403,6 +465,9 @@ func (l *Live) enqueue(key string, f func()) {
 	}
 	l.pending[key] = true
 	q := l.queue
+	if urgent {
+		q = l.urgent
+	}
 	l.mu.Unlock()
 	job := func() {
 		f()

@@ -15,6 +15,7 @@ import (
 
 	"github.com/rojoloco04/draftsmith/internal/db"
 	"github.com/rojoloco04/draftsmith/internal/lcu"
+	"github.com/rojoloco04/draftsmith/internal/liveclient"
 	"github.com/rojoloco04/draftsmith/internal/meta"
 	"github.com/rojoloco04/draftsmith/internal/opgg"
 	"github.com/rojoloco04/draftsmith/internal/overlay"
@@ -136,6 +137,19 @@ func cmdServe(ctx context.Context, args []string) error {
 				logger.Printf("overlay off: %v", err)
 			}
 		}
+		dirs := lcu.DefaultDirs()
+		if *leagueDir != "" {
+			dirs = []string{*leagueDir}
+		}
+		// Import puts a rune page in the client; it runs only when I press
+		// the button on a rune page.
+		srv.SetRuneImporter(func(ctx context.Context, page lcu.RunePage) error {
+			creds, err := lcu.Discover(ctx, dirs)
+			if err != nil {
+				return err
+			}
+			return lcu.New(creds).ImportRunes(ctx, page)
+		})
 		go func() {
 			o := watchOpts{leagueDir: *leagueDir, minGames: *minGames, suggest: true, onBoard: srv.WatchBoard}
 			w, note := newWatcher(ctx, d, m, o, logger)
@@ -143,12 +157,25 @@ func cmdServe(ctx context.Context, args []string) error {
 				logger.Printf("champ select suggestions off: %s", note)
 				srv.WatchStarted(note)
 			}
+			// During a game, read my champion's level, skill points and
+			// items from the game itself for the in-game build card.
+			game := liveclient.New()
+			var stopGame context.CancelFunc
 			onPhase := w.OnPhase
 			w.OnPhase = func(p string) {
 				if onPhase != nil {
 					onPhase(p)
 				}
 				srv.WatchPhase(p)
+				switch {
+				case inGame(p) && stopGame == nil:
+					var gctx context.Context
+					gctx, stopGame = context.WithCancel(ctx)
+					go game.Follow(gctx, 2*time.Second, srv.WatchLive)
+				case !inGame(p) && stopGame != nil:
+					stopGame()
+					stopGame = nil
+				}
 				if ov != nil {
 					ov.SetActive(p == lcu.PhaseChampSelect)
 				}

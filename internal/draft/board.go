@@ -29,6 +29,10 @@ type Board struct {
 	MyTeam, TheirTeam []Slot
 	MyBans, TheirBans []Champ
 
+	// Comp is my teammates' champions so far, for damage mix and
+	// frontline.
+	Comp TeamComp
+
 	// Note says why there are no suggestions, when there are none.
 	Note string
 	// Picks are the top suggestions, best first. Once I've locked in it
@@ -59,6 +63,9 @@ type Pick struct {
 	Suggestion // the numbers; zero for a locked champion outside my pool
 	Scored     bool
 	Reason     string
+	// Mine is the champion I'm hovering, shown whether or not it's a top
+	// suggestion.
+	Mine bool
 	// Vs are the likeliest lane opponents (at most two), by name.
 	Vs []Versus
 	// Runes is OP.GG's page: for RunesVs when that's set, otherwise the
@@ -131,9 +138,35 @@ func (l *Live) board(s lcu.Session, at time.Time, odds RoleOdds) Board {
 	return b
 }
 
+// hoverPick is the card for the champion I'm hovering: scored like a
+// suggestion if I've played it in this lane at all.
+func (l *Live) hoverPick(champ string, sug []Suggestion, position string, tl meta.TierList, odds RoleOdds, allies []string) Pick {
+	find := func(ss []Suggestion) *Suggestion {
+		for i := range ss {
+			if norm(ss[i].Champion) == norm(champ) {
+				return &ss[i]
+			}
+		}
+		return nil
+	}
+	sg := find(sug)
+	if sg == nil {
+		sg = find(Suggest(Input{Position: position, Games: l.Games, Base: l.Base, TierList: tl, Odds: odds,
+			Matchups: l.tablesFor([]string{champ}, position), Allies: allies}))
+	}
+	opp := likelyLaner(odds, position)
+	if sg != nil {
+		opp, _ = sg.LikelyOpponent(LikelyOdds)
+	}
+	p := l.pick(champ, sg, position, opp, true)
+	p.Mine = true
+	return p
+}
+
 // pick builds a suggestion's card. sg is nil for a locked champion
-// outside my pool.
-func (l *Live) pick(champ string, sg *Suggestion, position, opp string) Pick {
+// outside my pool. urgent puts its rune fetch ahead of the rest: it's set
+// for my own champion.
+func (l *Live) pick(champ string, sg *Suggestion, position, opp string, urgent bool) Pick {
 	p := Pick{Champ: Champ{Key: champ, Name: l.name(champ)}}
 	if sg != nil {
 		p.Suggestion, p.Scored = *sg, true
@@ -145,7 +178,11 @@ func (l *Live) pick(champ string, sg *Suggestion, position, opp string) Pick {
 			p.Vs = append(p.Vs, Versus{Champ: Champ{Key: o.Champion, Name: l.name(o.Champion)}, Odds: o.Odds, WinRate: o.WinRate, Games: o.Games})
 		}
 	}
-	r, loaded := l.runeFor(champ, opp, position)
+	r, loaded := l.runeFor(champ, opp, position, urgent)
+	if !loaded && opp != "" {
+		// Show the usual page while the matchup's loads.
+		r, loaded = l.usualRunes(champ, position)
+	}
 	switch {
 	case !loaded:
 		p.RunesState = RunesLoading

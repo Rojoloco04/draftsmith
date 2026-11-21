@@ -113,11 +113,22 @@ func newWatcher(ctx context.Context, d *db.DB, svc *meta.Service, o watchOpts, l
 	live.OnBoard = o.onBoard
 	w.OnSession = live.Update
 	w.OnPhase = func(p string) {
-		if p != lcu.PhaseChampSelect {
+		// Kept through the game, so a rune page or build that arrives
+		// after it starts still reaches the in-game card.
+		if p != lcu.PhaseChampSelect && !inGame(p) {
 			live.Reset()
 		}
 	}
 	return w, ""
+}
+
+// inGame reports whether a gameflow phase is a game loading or running.
+func inGame(phase string) bool {
+	switch phase {
+	case "GameStart", "InProgress", "Reconnect":
+		return true
+	}
+	return false
 }
 
 // champions indexes OP.GG's champion table by Riot id and key.

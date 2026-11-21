@@ -513,7 +513,35 @@ td.items img, td.items .slot { margin-right: 3px; }
 .skill-order { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 3px; }
 .skill-order li { display: flex; flex-direction: column; align-items: center; padding: 3px 0 4px; border-radius: 6px; font-size: .72rem; font-weight: 750; color: var(--k); background: color-mix(in srgb, var(--k) 14%, transparent); }
 .skill-order li span { font-size: .6rem; font-weight: 600; color: var(--muted); }
-.cs-game { max-width: 720px; }
+.cs-game { max-width: 760px; }
+
+/* The in-game build: every option per step, what I own, what's next. */
+.gb { gap: 12px; }
+.gb-sec { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; align-items: start; padding: 6px 8px; margin: 0 -8px; border-radius: 10px; }
+.gb-sec > .label { padding-top: 9px; }
+.gb-sec.now { background: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); }
+.gb-opts { display: grid; gap: 4px; }
+.gb-opt { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.gb-opt > .small { margin-left: auto; }
+.gb-opt.done .build-items { opacity: .55; }
+.build-items.it-wrap { flex-wrap: wrap; }
+.it { position: relative; display: inline-flex; border-radius: 8px; }
+.it img { display: block; width: 32px; height: 32px; border-radius: 8px; background: var(--surface-3); }
+.it.have::after { content: "✓"; position: absolute; right: -4px; bottom: -4px; width: 14px; height: 14px; border-radius: 50%; display: grid; place-items: center; font-size: 9px; font-weight: 800; background: var(--pos); color: #fff; }
+.it.next { box-shadow: 0 0 0 2px var(--accent); }
+.it .cnt { position: absolute; right: 1px; bottom: 0; font-size: .62rem; font-weight: 800; color: #fff; text-shadow: 0 0 3px #000, 0 0 2px #000; }
+.gb-now { margin-top: 14px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; }
+.gb-have, .gb-next { display: flex; align-items: center; gap: 10px; }
+.gb-have .it.have::after { display: none; }
+.gb-next .key { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; font-weight: 800; color: #fff; background: var(--k); }
+.gb-wait { margin: 12px 0 0; }
+.cs-level { font-size: 1rem; }
+.skill-order li.done { opacity: .45; }
+.skill-order li.next { outline: 2px solid var(--k); outline-offset: -2px; opacity: 1; }
+.cs-comp { margin: 0; display: flex; gap: 8px; align-items: baseline; }
+.cs .tag.comp { display: inline-block; align-self: flex-start; margin-top: 4px; background: var(--pos); text-transform: none; letter-spacing: 0; font-size: .7rem; }
+.cs-rank.mine { background: var(--accent); color: #fff; }
+.rune-import { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
 .cs-spells .small { margin-left: auto; margin-right: 0 !important; }
 .cs-runes summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; list-style: none; }
 .cs-runes summary::-webkit-details-marker { display: none; }
@@ -565,6 +593,13 @@ body.overlay { min-height: 0; font-size: 13px; overflow-x: hidden; background: v
 .overlay .build { margin-top: 10px; padding-top: 10px; gap: 8px; }
 .overlay .build-items img { width: 26px; height: 26px; }
 .overlay .build-row > .small { flex-basis: 100%; margin-left: 54px; margin-top: -6px; }
+.overlay .gb-sec { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.overlay .gb-sec > .label { padding-top: 0; }
+.overlay .it img { width: 26px; height: 26px; }
+@media (max-width: 560px) {
+  .gb-sec { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .gb-sec > .label { padding-top: 0; }
+}
 .overlay .skill-order { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 .overlay .cs-spells .sp { width: 24px; height: 24px; }
 .overlay .cs-spells .small { flex-basis: 100%; margin-left: 0; }

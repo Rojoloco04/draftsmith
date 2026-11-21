@@ -63,6 +63,8 @@ type Server struct {
 	status  Status
 	refresh func() bool
 	cs      champSelect
+	// importRunes, if set, puts a rune page in the League client.
+	importRunes RuneImporter
 }
 
 // New builds a server over an indexed database of my accounts' games.
@@ -137,6 +139,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /champ-select", s.champSelectPage)
 	mux.HandleFunc("GET /champ-select/events", s.champSelectEvents)
 	mux.HandleFunc("GET /overlay", s.overlayPage)
+	mux.HandleFunc("POST /champ-select/runes", s.importRunesHandler)
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusNotFound, errors.New("page not found"))
 	})

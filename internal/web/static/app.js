@@ -63,3 +63,22 @@ document.addEventListener("error", function (e) {
   src.addEventListener("error", function () { root.classList.add("offline"); });
   src.addEventListener("open", function () { root.classList.remove("offline"); });
 })();
+
+// Rune pages: Import puts the page in the League client. It's a click
+// only; nothing imports by itself. The board is replaced on every update,
+// so the click is caught on the document.
+document.addEventListener("click", function (e) {
+  var btn = e.target.closest && e.target.closest("button[data-import]");
+  if (!btn) return;
+  var status = btn.parentElement.querySelector("[data-import-status]");
+  btn.disabled = true;
+  if (status) { status.textContent = "Importing…"; status.className = "muted small"; }
+  var body = new URLSearchParams({ champ: btn.getAttribute("data-import") });
+  fetch("/champ-select/runes", { method: "POST", headers: { "X-Draftsmith": "import" }, body: body })
+    .then(function (r) { return r.text().then(function (t) { return { ok: r.ok, text: t.trim() }; }); })
+    .then(function (res) {
+      if (status) { status.textContent = res.ok ? "Imported ✓" : res.text; status.className = "small " + (res.ok ? "pos" : "neg"); }
+    })
+    .catch(function () { if (status) { status.textContent = "Couldn't reach the dashboard"; status.className = "small neg"; } })
+    .then(function () { btn.disabled = false; });
+});

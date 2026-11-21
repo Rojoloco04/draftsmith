@@ -53,7 +53,13 @@ OP.GG data (Emerald+, current patch) shows up in three places: the tier list pag
 
 `draftsmith watch` follows the League client on the same PC (it reads the client's local API, which only listens on localhost) and, in champ select, logs the draft and suggestions from your pool. `serve --watch` does the same inside the dashboard: the **Champ select** page updates live over server-sent events with both teams, bans, each enemy's likely lane, your top three picks (estimated win rate from your record, OP.GG's win rate and the likely lane matchup) and OP.GG's rune page for each, or just your champion's once you lock in.
 
-It only reads. It never hovers, picks, bans or imports runes, it shows champions and lanes but never anyone's name, and it goes idle once the game loads.
+Your own hover always gets a card, with its runes fetched ahead of everything else. Suggestions also weigh your team's comp: a pick that brings magic damage to a mostly AD team (or the reverse), or the team's first tank, scores a little higher, and the board shows your team's damage mix and frontline. Damage type and frontline come from Riot's champion classes in Data Dragon.
+
+**Import to client** under a rune page puts it in the League client as "Draftsmith Imported" and selects it. Draftsmith keeps just that one page and updates it on every import; it never touches your own pages. The first import needs a free page slot; if every slot is full, delete one or rename one to start with "Draftsmith" and it'll be reused.
+
+During the game the page shows your champion's whole OP.GG build: starting items, core paths, boots, options for the 4th to 6th items, other late items, and the skill order. It reads your level and items from the game's Live Client Data API (your champion only), ticks off what you own, and points at the next item and the next skill to level.
+
+Apart from the Import button it only reads. It never hovers, picks or bans, and it shows champions and lanes but never anyone's name.
 
 The dashboard has no login, so it only listens where you tell it to and refuses `0.0.0.0`. Keep it on localhost or Tailscale; don't port forward it. Other players appear as champion and position only. Champion, item, rune and summoner spell icons and splash art load from Riot's Data Dragon CDN, and ranked emblems from CommunityDragon (`raw.communitydragon.org`); those URLs carry only ids and tier names. Rune and spell names are embedded from Data Dragon (`internal/web/ddragon`).
 
@@ -105,7 +111,6 @@ internal/fixture    synthetic match/timeline JSON (and one scrubbed real game) f
 ## Roadmap
 
 - `sample`: crawl games from players in your tier to build real benchmarks (CS diff, vision, early deaths) for your role and elo, so the report can say "below your bracket" instead of only "below your own average"
-- A champ select overlay: the champ select page in a small always-on-top window next to the client
 - Death position heatmap across games
 - LLM writeup over `export` output
 - Quartermaster integration: post-game report in Discord

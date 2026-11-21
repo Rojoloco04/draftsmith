@@ -2,6 +2,8 @@ package web
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/rojoloco04/draftsmith/internal/draft"
 	"github.com/rojoloco04/draftsmith/internal/lcu"
+	"github.com/rojoloco04/draftsmith/internal/liveclient"
 )
 
 // champSelect is what the champ select page shows. serve's watcher feeds
@@ -57,16 +60,100 @@ func (s *Server) WatchPhase(phase string) {
 	})
 }
 
-// WatchBoard shows a champ select. It's ignored outside one: a rune page
-// fetched for the last draft can arrive after the client has moved on.
+// WatchBoard shows a champ select. Outside one, it only updates the game
+// in progress with a late rune page or build for the champion I locked
+// in; anything else for the last draft is dropped.
 func (s *Server) WatchBoard(b draft.Board) {
 	s.csUpdate(func(c *champSelect) bool {
+		if inGame(c.phase) && c.game != nil && b.Locked && len(b.Picks) > 0 && b.Picks[0].Key == c.game.Pick.Key {
+			c.game.Pick = b.Picks[0]
+			return true
+		}
 		if c.phase != lcu.PhaseChampSelect {
 			return false
 		}
 		c.board, c.have = b, true
 		return true
 	})
+}
+
+// WatchLive records my champion's state in the game in progress, or why
+// it can't be read (liveclient.ErrNotReady while the game loads).
+func (s *Server) WatchLive(snap liveclient.Snapshot, err error) {
+	s.csUpdate(func(c *champSelect) bool {
+		if c.game == nil {
+			return false
+		}
+		if err != nil {
+			c.game.Live, c.game.LiveErr = nil, err
+		} else {
+			c.game.Live, c.game.LiveErr = &snap, nil
+		}
+		return true
+	})
+}
+
+// RuneImporter puts a rune page in the League client.
+type RuneImporter func(ctx context.Context, page lcu.RunePage) error
+
+// SetRuneImporter turns on the Import button on rune pages.
+func (s *Server) SetRuneImporter(f RuneImporter) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.importRunes = f
+}
+
+// importRunesHeader must be on import requests. A page on another site
+// can't send a custom header here without a CORS preflight, which this
+// server never answers, so only the dashboard can import.
+const importRunesHeader = "X-Draftsmith"
+
+// importRunesHandler puts the rune page shown for one champion (form value
+// champ, its Riot key) in the client. It only runs when I press Import.
+func (s *Server) importRunesHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get(importRunesHeader) != "import" {
+		http.Error(w, "import from the dashboard", http.StatusForbidden)
+		return
+	}
+	key := r.FormValue("champ")
+	s.mu.Lock()
+	imp := s.importRunes
+	var pick *draft.Pick
+	if s.cs.game != nil && s.cs.game.Pick.Key == key {
+		p := s.cs.game.Pick
+		pick = &p
+	}
+	for _, p := range s.cs.board.Picks {
+		if pick == nil && p.Key == key {
+			p := p
+			pick = &p
+		}
+	}
+	s.mu.Unlock()
+	switch {
+	case imp == nil:
+		http.Error(w, "Rune import needs serve --watch on the PC League runs on.", http.StatusConflict)
+		return
+	case pick == nil || pick.RunesState != draft.RunesOK:
+		http.Error(w, "That rune page isn't on the board any more.", http.StatusNotFound)
+		return
+	}
+	page := lcu.RunePage{PrimaryStyle: pick.Runes.PrimaryStyle, SubStyle: pick.Runes.SubStyle}
+	page.Perks = append(append(append(page.Perks, pick.Runes.Primary...), pick.Runes.Sub...), pick.Runes.StatMods...)
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	if err := imp(ctx, page); err != nil {
+		s.log.Printf("rune import for %s: %v", pick.Name, err)
+		msg := "Couldn't import: " + err.Error()
+		if errors.Is(err, lcu.ErrNoRoom) {
+			msg = sentence(err.Error())
+		}
+		http.Error(w, msg, http.StatusBadGateway)
+		return
+	}
+	s.log.Printf("imported %s's rune page into the client", pick.Name)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	fmt.Fprint(w, "Imported")
 }
 
 // csUpdate applies f and, if it reports a change, wakes every stream.
@@ -82,11 +169,17 @@ func (s *Server) csUpdate(f func(*champSelect) bool) {
 	s.cs.changed = make(chan struct{})
 }
 
-// gameView is the game in progress: the pick I locked in, with its build.
+// gameView is the game in progress: the pick I locked in, with its build,
+// and my champion's state from the game when it can be read.
 type gameView struct {
 	Pick     draft.Pick
 	Position string
 	Patch    string
+	Live     *liveclient.Snapshot
+	LiveErr  error
+	// Build is Pick's build laid out against Live, filled in by
+	// csSnapshot.
+	Build gameBuild
 }
 
 // inGame reports whether a gameflow phase is a game loading or running.
@@ -110,6 +203,8 @@ type csView struct {
 	// Left is the countdown at render time, in ms (0 for none). The page
 	// counts it down itself between updates.
 	Left int64
+	// CanImport shows the Import button on rune pages.
+	CanImport bool
 }
 
 // csSnapshot returns the current view and a channel closed on the next
@@ -121,7 +216,12 @@ func (s *Server) csSnapshot() (csView, <-chan struct{}) {
 		s.cs.changed = make(chan struct{})
 	}
 	c := s.cs
-	v := csView{On: c.on, Note: c.note, Phase: c.phase, Have: c.have, Board: c.board, Game: c.game}
+	v := csView{On: c.on, Note: c.note, Phase: c.phase, Have: c.have, Board: c.board, CanImport: s.importRunes != nil}
+	if c.game != nil {
+		g := *c.game
+		g.Build = newGameBuild(g.Pick.Build, g.Patch, g.Live)
+		v.Game = &g
+	}
 	if !c.board.Ends.IsZero() {
 		v.Left = max(0, time.Until(c.board.Ends).Milliseconds())
 	}

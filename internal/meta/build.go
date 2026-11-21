@@ -32,10 +32,32 @@ type Build struct {
 	Starter []Choice `json:"starter_items"`
 	Boots   []Choice `json:"boots"`
 	Core    []Choice `json:"core_items"`
+	// Slots are the options for each item by when it's finished (Depth 1
+	// is the first item). A matchup guide lists every depth; champion
+	// analysis lists 4 to 6, after the core.
+	Slots []ItemSlot `json:"single_items"`
+	// Late are items that end up in finished builds, most built first.
+	Late []Choice `json:"last_items"`
 	// Skills are level-by-level skill orders, Max the order abilities are
 	// maxed in (e.g. Q, W, E).
 	Skills []SkillOrder `json:"skills"`
 	Max    []SkillMax   `json:"skill_masteries"`
+}
+
+// ItemSlot is the options for one item in build order.
+type ItemSlot struct {
+	Depth int      `json:"depth"`
+	Items []Choice `json:"items"`
+}
+
+// Slot returns the options for the depth-th item, if listed.
+func (b Build) Slot(depth int) []Choice {
+	for _, s := range b.Slots {
+		if s.Depth == depth {
+			return s.Items
+		}
+	}
+	return nil
 }
 
 // SkillOrder is which ability to level at each level, "Q", "W", "E" or "R".
@@ -56,7 +78,7 @@ type SkillMax struct {
 
 // Empty reports whether OP.GG listed nothing to build.
 func (b Build) Empty() bool {
-	return len(b.Starter)+len(b.Boots)+len(b.Core)+len(b.Skills)+len(b.Max) == 0
+	return len(b.Starter)+len(b.Boots)+len(b.Core)+len(b.Slots)+len(b.Late)+len(b.Skills)+len(b.Max) == 0
 }
 
 // TopSpells is the most played summoner spell pair, if any.
@@ -78,6 +100,10 @@ var buildFields = []string{
 	"data.core_items.{ids[],ids_names[],play,win,pick_rate}",
 	"data.skills.{order[],play,win,pick_rate}",
 	"data.skill_masteries.{ids[],play,win,pick_rate}",
+	"data.fourth_items[].{ids[],ids_names[],play,win,pick_rate}",
+	"data.fifth_items[].{ids[],ids_names[],play,win,pick_rate}",
+	"data.sixth_items[].{ids[],ids_names[],play,win,pick_rate}",
+	"data.last_items[].{ids[],ids_names[],play,win,pick_rate}",
 }
 
 // analysisBuild is the analysis's single-option shape of a Build.
@@ -88,6 +114,10 @@ type analysisBuild struct {
 	Core    Choice     `json:"core_items"`
 	Skills  SkillOrder `json:"skills"`
 	Max     SkillMax   `json:"skill_masteries"`
+	Fourth  []Choice   `json:"fourth_items"`
+	Fifth   []Choice   `json:"fifth_items"`
+	Sixth   []Choice   `json:"sixth_items"`
+	Late    []Choice   `json:"last_items"`
 }
 
 func (a analysisBuild) build() Build {
@@ -97,7 +127,12 @@ func (a analysisBuild) build() Build {
 		}
 		return []Choice{c}
 	}
-	b := Build{Spells: one(a.Spells), Starter: one(a.Starter), Boots: one(a.Boots), Core: one(a.Core)}
+	b := Build{Spells: one(a.Spells), Starter: one(a.Starter), Boots: one(a.Boots), Core: one(a.Core), Late: a.Late}
+	for i, items := range [][]Choice{a.Fourth, a.Fifth, a.Sixth} {
+		if len(items) > 0 {
+			b.Slots = append(b.Slots, ItemSlot{Depth: 4 + i, Items: items})
+		}
+	}
 	if len(a.Skills.Order) > 0 {
 		b.Skills = []SkillOrder{a.Skills}
 	}

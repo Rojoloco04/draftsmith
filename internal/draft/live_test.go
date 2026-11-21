@@ -215,3 +215,79 @@ func TestClientPosition(t *testing.T) {
 		}
 	}
 }
+
+// My hover gets its own card, first, with its rune page fetched ahead of
+// the rest, whether or not it's a top suggestion.
+func TestLiveShowsMyHover(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	src := testService(t, false)
+	champs, err := src.Champions(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID, names, ids := map[int]string{}, map[string]string{}, map[string]int{}
+	for _, c := range champs.List {
+		byID[c.ID] = c.Key
+		names[c.Key] = c.Name
+		ids[c.Key] = c.ID
+	}
+	var mine []analysis.Game
+	mine = append(mine, games("Galio", "MIDDLE", 6, 2)...)
+	mine = append(mine, games("Vladimir", "MIDDLE", 3, 1)...)
+	var (
+		bmu  sync.Mutex
+		last Board
+	)
+	l := &Live{
+		Meta: src, Games: mine, Base: 0.5, MinGames: 2,
+		Key: func(id int) string { return byID[id] }, Name: func(k string) string { return names[k] },
+		Log: log.New(&syncBuffer{}, "", 0),
+		OnBoard: func(b Board) {
+			bmu.Lock()
+			last = b
+			bmu.Unlock()
+		},
+	}
+	l.Start(ctx)
+
+	s := loadCaptured(t, "champselect_final.json")
+	for i, turn := range s.Actions {
+		for j, a := range turn {
+			if a.ActorCellID == s.LocalPlayerCellID && a.Type == "pick" {
+				s.Actions[i][j].Completed = false
+			}
+		}
+	}
+	for i, m := range s.MyTeam {
+		if m.CellID == s.LocalPlayerCellID {
+			s.MyTeam[i].ChampionID = ids["Vladimir"] // the second suggestion
+		}
+	}
+	l.Update(s)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		bmu.Lock()
+		b := last
+		bmu.Unlock()
+		if len(b.Picks) > 0 && b.Picks[0].RunesState == RunesOK {
+			p := b.Picks[0]
+			if !p.Mine || p.Name != "Vladimir" || !p.Scored {
+				t.Fatalf("first card should be my hover: %+v", p)
+			}
+			for _, q := range b.Picks[1:] {
+				if q.Name == "Vladimir" || q.Mine {
+					t.Errorf("hover shown twice: %+v", b.Picks)
+				}
+			}
+			if b.Comp.Known != 4 {
+				t.Errorf("comp should count four teammates: %+v", b.Comp)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("my hover's runes never loaded: %+v", b.Picks)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}

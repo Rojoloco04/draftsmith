@@ -30,7 +30,7 @@ The Phase 2 leftover (pool vs meta in the markdown `report`) is done on `main`: 
 
 The dashboard's Refresh button (sync now, reload when done) was merged into `main` on 2026-11-17 (not pushed).
 
-Phase 3 is in progress on branch `phase3-watch` (rebased on `main`; see the Phase 3 section): client discovery, gameflow polling, reading champ select (checked against a real ranked champ select), lane odds for the enemy team, and suggestions with rune pages logged by `watch`.
+Phase 3 was built on branch `phase3-watch` and merged into `main` on 2026-11-20 (see the Phase 3 section): client discovery, gameflow polling, reading champ select (checked against a real ranked champ select), lane odds for the enemy team, and suggestions with rune pages logged by `watch`.
 
 UI refresh (on `phase3-watch`, 2026-11-17): new stylesheet (sticky header with icon nav, splash-art heroes on the overview, champion and match pages, rounded champion icons), ranked emblem and crest from CommunityDragon (`raw.communitydragon.org`, added to the CSP's `img-src`), role glyphs drawn as an inline SVG sprite in `layout.html`, and summoner spells, keystone and secondary tree on every match row and player line. That needed `spells` and `runes` columns on `participants`, so `db.SchemaVersion` is 2 and the first `serve` after upgrading rebuilds the index. Rune 8230 is now "Stormraider's Surge" (was Phase Rush) in Data Dragon. Checked by hand against the real archive in dark and light mode and at ~500px wide (headless Chrome works for screenshots; headless Edge on this machine exits without writing one, and desktop Chrome can't go narrower than ~500px, so true phone width needs DevTools emulation).
 
@@ -44,9 +44,9 @@ The overlay is built (2026-11-18, see "Overlay" in the Phase 3 section): `serve 
 
 1. ~~Summoner spell recommendations in champ select~~: done 2026-11-18, see "Spells and builds" in the Phase 3 section.
 2. ~~Multiple accounts~~: done 2026-11-18, see "Multiple accounts" below. `Rojoloco#SLU` is not added yet: that needs `draftsmith sync --riot-id Rojoloco#SLU` with the new build, after stopping any `serve` still running the old one (an old binary rewriting `state.json` would drop the account list).
-3. ~~Build recommendations in game~~: done 2026-11-18, see "In-game build" below. Open question for the user: should the overlay window also show during the game (over the game's screen edge), or is the dashboard on a second screen or phone enough?
+3. ~~Build recommendations in game~~: done 2026-11-18, see "In-game build" below. The user answered the overlay question on 2026-11-20: the dashboard is enough during the game; the overlay stays champ select only. The overlay's docking was checked in a real champ select and is right.
 
-Team comp gaps (damage mix, frontline) are not in the score yet.
+Done 2026-11-20 (asked by the user, see "Full build, my hover, rune import, team comp, item tracking" below): the in-game card shows every build option, my hovered champion always gets a card with runes, an Import button puts a rune page in the client, team comp is in the score, and the in-game card tracks my items and level from the Live Client Data API. Not yet checked in a real game.
 
 Multiple accounts (2026-11-18):
 
@@ -64,7 +64,17 @@ In-game build (2026-11-18):
 - `web`: when gameflow goes from ChampSelect to GameStart/InProgress/Reconnect with a locked pick on the board, the server keeps that pick (`champSelect.game`) and `/champ-select` and `/overlay` show an "In game" build card: starting items, boots, core, max order, the 15-level skill order, spells and runes. Any other phase clears it; a dodge never shows one; a game that started before `serve` saw its champ select shows no build.
 - Static data only, for my own champion: no Live Client Data API yet, so nothing tracks what I've bought. The overlay window still shows only during champ select.
 
+Full build, my hover, rune import, team comp, item tracking (2026-11-20):
+
+- **Full build.** `meta.Build` has `Slots` (item options by build depth) and `Late` (items in finished builds). The matchup guide already returned them (`single_items` depth 1-6, 10 options each; `last_items`, 30); champion analysis now also asks for `fourth_items[]`, `fifth_items[]`, `sixth_items[]` and `last_items[]` (three options each), so `analysisVersion` is `v5`. Analysis still lists one option for start, boots and core; the matchup guide lists up to 15 core paths, so the in-game card is fullest when the lane opponent was 50%+ likely. `web.newGameBuild` lays it out: two starts, three core paths, three boots, four options each for the 4th to 6th items, six other late items, max order and skill order.
+- **Runes for my hover.** The bug: a hover that wasn't a top-3 suggestion had no card, and my locked pick's rune fetch waited behind every matchup table in the serial OP.GG queue (1.5-2s each). Now `Live` has an urgent queue that runs first, used for my own champion (hover or lock); my hover always gets the first card (`Pick.Mine`, "Your hover"), scored if I've played it there at all; and while a matchup page loads, the usual page shows if it's already fetched. `Live.Reset` no longer runs on entering the game, so a rune page or build that lands after the game starts reaches the in-game card (`Server.WatchBoard` updates the game's pick when the champion matches).
+- **Rune import.** One page, `lcu.PageName` ("Draftsmith Imported", the user's choice 2026-11-20), updated on every import, like other rune apps. `lcu.Client.ImportRunes`: deletes pages named `Draftsmith*` (only those, so older per-champion pages are cleaned up too), checks `/lol-perks/v1/inventory` `canAddCustomPage` when none was freed, then `POST /lol-perks/v1/pages` with `current: true` and 9 perk ids (4 primary, 2 secondary, 3 shards). Never overwrites my own pages; with no room it says to free one or rename one to start with Draftsmith. Web: `POST /champ-select/runes?champ=<key>` needs the `X-Draftsmith: import` header (cross-site pages can't send it without a preflight the server never answers); `serve --watch` sets the importer, which rediscovers the client per click. Button only; nothing imports by itself. The page limit and the exact "full" error text aren't checked against a real client yet.
+- **Team comp.** `internal/draft/champions.json` is Data Dragon 16.23.1's champion table cut to tags and attack/defense/magic ratings. `draft.APShare` is 1 when magic > attack, 0 when attack > magic, 0.5 when tied, with a small override table for misreads (Bel'Veth, Ezreal, Akshan AD; Vex, Seraphine, Twisted Fate, Rell, Leona AP; Corki, Kai'Sa, Kog'Maw, Varus, Kayle, Jax, Shaco, Shen mixed). Frontline is Riot's Tank tag. `TeamComp.fit` adds `DamageWeight` (0.25) x 4 x (0.5 - team AP) x (pick AP - 0.5) in log odds, plus `FrontlineWeight` (0.15) for the team's first tank, scaled by known teammates / 4, and only with 2+ known (picks and hovers). The board shows "Your team: mostly AD · no frontline" and each pick's note. Decided without asking: the weights (about 6 and 4 points at most).
+- **Item tracking.** `internal/liveclient` reads `https://127.0.0.1:2999/liveclientdata/activeplayer` (level, skill points, my Riot ID) and `playeritems?riotId=` for my items only; other players are never requested, and the Riot ID is never logged (errors carry the path only). TLS is verified against Riot's root without a hostname check (the game's cert may not name 127.0.0.1). `serve --watch` polls it every 2s while gameflow is GameStart/InProgress/Reconnect and stops after. The in-game card shows my items, "Buy next" (first missing item of the top core path until three build items are finished, then the top option for the next slot) and "Level up" (the skill order's next point when I have one to spend), with owned items ticked.
+
 Handoff notes (things a new session would otherwise rediscover):
+
+- Work on `main` and push there; no feature branches (the user's call, 2026-11-20).
 
 - `gofmt -l` lists nearly every file because `core.autocrlf=true` gives CRLF working copies. That's noise; the repo stores LF. Run `gofmt -l` on files you touched, or check `gofmt -d` for real changes.
 - Python's text mode on Windows writes CRLF; pass `newline='
@@ -236,7 +246,7 @@ Plan from here:
 - Start with polling (`GET /lol-gameflow/v1/gameflow-phase`, then `GET /lol-champ-select/v1/session` about once a second during ChampSelect). The WebSocket event stream is nicer but needs a dependency; only add it if polling feels laggy.
 - From the session use only: my cell and assigned position, my team's picks and hovers, enemy picks once visible, bans, and the action timer. Verify field names against the real client.
 - Suggestions: score champions from my pool for my assigned role using my adjusted win rate and games played, OP.GG tier, OP.GG counter data vs visible enemy laner, and team comp gaps (damage type, frontline). Show the top 3 with one-line reasons.
-- Runes: show OP.GG's recommended page for the suggested or hovered champion. Importing it into the client (`/lol-perks/v1/pages`) only happens when I click a button. Verify endpoint behavior and the page limit on the real client.
+- Runes: show OP.GG's recommended page for the suggested or hovered champion. Importing it into the client (`/lol-perks/v1/pages`) only happens when I click a button: done 2026-11-20; the page limit still needs a look on the real client.
 - ~~Push state to `serve`~~: done in process with `serve --watch` (see "Champ select page").
 
 ### Compliance rules (non-negotiable)

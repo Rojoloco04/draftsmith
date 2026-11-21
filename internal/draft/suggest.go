@@ -43,6 +43,9 @@ type Input struct {
 	// on both teams. Hovered are champions a teammate is hovering. Both
 	// hold Riot keys.
 	Taken, Hovered []string
+	// Allies are my teammates' champions (picks and hovers, Riot keys),
+	// for team comp. Empty leaves comp out.
+	Allies []string
 }
 
 // Opponent is one possible lane opponent for a suggestion.
@@ -71,8 +74,12 @@ type Suggestion struct {
 	// odds (0 when no opponent is known).
 	Matchup   float64
 	Opponents []Opponent
-	// WinProb is Personal shifted by Matchup: the score suggestions are
-	// ranked by.
+	// Comp is how much it fits my team's damage mix and frontline, in log
+	// odds, and CompNote why ("" when it doesn't matter).
+	Comp     float64
+	CompNote string
+	// WinProb is Personal shifted by Matchup and Comp: the score
+	// suggestions are ranked by.
 	WinProb float64
 	// TeammateHovering is set if a teammate is hovering it.
 	TeammateHovering bool
@@ -85,6 +92,7 @@ func Suggest(in Input) []Suggestion {
 	taken := keySet(in.Taken)
 	hovered := keySet(in.Hovered)
 	minGames := max(in.MinGames, 1)
+	team := Comp(in.Allies)
 
 	byChamp := map[string]*analysis.Stats{}
 	var order []string
@@ -132,9 +140,10 @@ func Suggest(in Input) []Suggestion {
 			s.Opponents = append(s.Opponents, o)
 		}
 		sort.SliceStable(s.Opponents, func(i, j int) bool { return s.Opponents[i].Odds > s.Opponents[j].Odds })
+		s.Comp, s.CompNote = team.fit(champ)
 		s.WinProb = s.Personal
-		if s.Matchup != 0 {
-			s.WinProb = sigmoid(logit(s.Personal) + s.Matchup)
+		if s.Matchup != 0 || s.Comp != 0 {
+			s.WinProb = sigmoid(logit(s.Personal) + s.Matchup + s.Comp)
 		}
 		out = append(out, s)
 	}
@@ -176,6 +185,9 @@ func (s Suggestion) Reason(position string, name func(string) string) string {
 		mu = append(mu, "lane opponent not picked yet")
 	}
 	parts = append(parts, strings.Join(mu, ", "))
+	if s.CompNote != "" {
+		parts = append(parts, s.CompNote)
+	}
 	if s.TeammateHovering {
 		parts = append(parts, "a teammate is hovering it")
 	}
