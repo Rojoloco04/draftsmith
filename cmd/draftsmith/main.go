@@ -64,6 +64,7 @@ func main() {
 	bare := len(os.Args) < 2
 	if bare {
 		useExeDir()
+		rebuildIfChanged(os.Stderr)
 	}
 	loadDotEnv(".env")
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
