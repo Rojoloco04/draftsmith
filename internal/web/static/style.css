@@ -42,8 +42,11 @@
   --serif: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
 }
 
+/* Dark mode follows the system unless a theme is picked in settings
+   (data-theme on <html>). The two dark blocks must stay the same;
+   TestDarkThemeBlocksMatch checks. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #060b14;
     --surface: #0b1322;
     --surface-2: #101a2d;
@@ -80,6 +83,44 @@
     --hero-splash: .5;
   }
 }
+:root[data-theme="dark"] {
+  --bg: #060b14;
+  --surface: #0b1322;
+  --surface-2: #101a2d;
+  --surface-3: #172338;
+  --line: #1d2a3f;
+  --line-strong: #4a3d22;
+  --text: #ece3cc;
+  --muted: #8f8b7c;
+  --heading: #f0dca6;
+  --accent: #d6b46a;
+  --accent-soft: rgba(214, 180, 106, .12);
+  --win: #33c6d6;
+  --win-soft: rgba(51, 198, 214, .1);
+  --loss: #e0473c;
+  --loss-soft: rgba(224, 71, 60, .1);
+  --pos: #4fd49a;
+  --neg: #ff6a5c;
+  --gold: #d6b46a;
+  --gold-line: #785a28;
+  --frame: #3a3222;
+  --panel-a: rgba(16, 26, 45, .97);
+  --panel-b: rgba(9, 15, 27, .97);
+  --header-a: #0b1322;
+  --header-b: #070d18;
+  --rune-bg: #04070d;
+  --s1: #d6b46a;
+  --s2: #5c6a80;
+  --s3: #e0473c;
+  --rift: #0f1a2b;
+  --glow: rgba(51, 198, 214, .12);
+  --hatch: rgba(214, 180, 106, .025);
+  --shadow: 0 10px 30px rgba(0, 0, 0, .35);
+  --shadow-hover: 0 14px 36px rgba(0, 0, 0, .5);
+  --hero-splash: .5;
+  color-scheme: dark;
+}
+:root[data-theme="light"] { color-scheme: light; }
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }

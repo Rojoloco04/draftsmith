@@ -29,8 +29,8 @@ func (f *fakeSettings) SetKey(_ context.Context, key string) error {
 	return nil
 }
 
-func (f *fakeSettings) SetOptions(_ context.Context, platform, queues string, overlay bool) error {
-	f.s.Platform, f.s.Queues, f.s.Overlay = platform, queues, overlay
+func (f *fakeSettings) SetOptions(_ context.Context, platform, queues, theme string, overlay bool) error {
+	f.s.Platform, f.s.Queues, f.s.Theme, f.s.Overlay = platform, queues, theme, overlay
 	return nil
 }
 

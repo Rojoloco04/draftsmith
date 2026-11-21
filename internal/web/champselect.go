@@ -240,7 +240,10 @@ func (s *Server) champSelectPage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) overlayPage(w http.ResponseWriter, r *http.Request) {
 	v, _ := s.csSnapshot()
 	w.Header().Set("Cache-Control", "no-store")
-	s.render(w, r, "overlay", "overlay", struct{ CS csView }{v})
+	s.render(w, r, "overlay", "overlay", struct {
+		CS    csView
+		Theme string
+	}{v, s.Theme()})
 }
 
 // csKeepAlive is how often an idle event stream gets a comment, so

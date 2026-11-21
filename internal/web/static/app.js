@@ -123,3 +123,17 @@ document.addEventListener("click", function (e) {
     .catch(function () { if (status) { status.textContent = "Couldn't reach the dashboard"; status.className = "small neg"; } })
     .then(function () { btn.disabled = false; });
 });
+
+// In the desktop app, tell the window which theme is showing (picked in
+// settings, or the system's) so its title bar matches. Browsers don't
+// have the hook and skip this.
+(function () {
+  if (typeof window.draftsmithTheme !== "function") return;
+  var mq = matchMedia("(prefers-color-scheme: dark)");
+  function report() {
+    var t = document.documentElement.getAttribute("data-theme");
+    window.draftsmithTheme(t ? t === "dark" : mq.matches);
+  }
+  report();
+  mq.addEventListener("change", report);
+})();

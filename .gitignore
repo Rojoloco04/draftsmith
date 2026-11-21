@@ -3,6 +3,7 @@ data/
 /draftsmith
 /draftsmith.exe
 /draftsmith.exe~
+/draftsmith.new.exe
 *.md.out
 report.md
 games.jsonl

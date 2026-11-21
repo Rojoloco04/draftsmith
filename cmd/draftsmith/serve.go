@@ -109,6 +109,7 @@ func cmdServe(ctx context.Context, args []string) error {
 		s.LastSync = st.LastSync()
 		s.SyncDisabled = disabled
 	})
+	srv.SetTheme(os.Getenv("DRAFTSMITH_THEME"))
 	srv.SetSettings(&settingsBackend{
 		envPath: envFile(), c: c, rate: *rate, timelines: !*noTimelines, overlay: !*noOverlay,
 		store: s, db: d, srv: srv, ctl: ctl, logger: logger,

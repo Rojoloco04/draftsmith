@@ -101,6 +101,7 @@ func (b *settingsBackend) Settings() web.Settings {
 	key := os.Getenv("RIOT_API_KEY")
 	out := web.Settings{
 		KeySet: key != "", Platform: b.c.platform, Queues: strings.ToLower(b.c.queues), Overlay: b.overlay, File: b.envPath,
+		Theme: b.srv.Theme(),
 	}
 	switch out.Queues {
 	case "":
@@ -153,7 +154,7 @@ func (b *settingsBackend) SetKey(ctx context.Context, key string) error {
 	return nil
 }
 
-func (b *settingsBackend) SetOptions(ctx context.Context, platform, queues string, overlay bool) error {
+func (b *settingsBackend) SetOptions(ctx context.Context, platform, queues, theme string, overlay bool) error {
 	if _, ok := riot.RegionFor(platform); !ok {
 		return fmt.Errorf("unknown region %q", platform)
 	}
@@ -168,7 +169,14 @@ func (b *settingsBackend) SetOptions(ctx context.Context, platform, queues strin
 	if !overlay {
 		on = "off"
 	}
-	if err := b.saveEnv(map[string]string{"DRAFTSMITH_PLATFORM": platform, "DRAFTSMITH_QUEUES": queues, "DRAFTSMITH_OVERLAY": on}); err != nil {
+	switch theme {
+	case "", "dark", "light":
+	default:
+		return fmt.Errorf("unknown theme %q", theme)
+	}
+	if err := b.saveEnv(map[string]string{
+		"DRAFTSMITH_PLATFORM": platform, "DRAFTSMITH_QUEUES": queues, "DRAFTSMITH_OVERLAY": on, "DRAFTSMITH_THEME": theme,
+	}); err != nil {
 		return err
 	}
 	changed := platform != b.c.platform || queues != strings.ToLower(b.c.queues)

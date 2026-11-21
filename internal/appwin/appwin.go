@@ -23,6 +23,9 @@ type Options struct {
 	// Icon is an .ico file (PNG entries are fine) for the title bar and
 	// taskbar. Optional.
 	Icon []byte
+	// Theme is "dark", "light", or "" to follow Windows: the title bar's
+	// colors until the page reports the theme it shows.
+	Theme string
 	// DataDir holds WebView2's profile (cache, cookies).
 	DataDir string
 	Log     *log.Logger

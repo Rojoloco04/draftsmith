@@ -153,16 +153,16 @@ func TestSettingsFirstRun(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	if err := b.SetOptions(ctx, "euw1", "both", false); err != nil {
+	if err := b.SetOptions(ctx, "euw1", "both", "dark", false); err != nil {
 		t.Fatal(err)
 	}
 	env, _ := os.ReadFile(b.envPath)
-	for _, want := range []string{"DRAFTSMITH_PLATFORM=euw1", "DRAFTSMITH_QUEUES=both", "DRAFTSMITH_OVERLAY=off"} {
+	for _, want := range []string{"DRAFTSMITH_PLATFORM=euw1", "DRAFTSMITH_QUEUES=both", "DRAFTSMITH_OVERLAY=off", "DRAFTSMITH_THEME=dark"} {
 		if !strings.Contains(string(env), want) {
 			t.Errorf(".env missing %s: %q", want, env)
 		}
 	}
-	if err := b.SetOptions(ctx, "mars1", "solo", true); err == nil {
+	if err := b.SetOptions(ctx, "mars1", "solo", "", true); err == nil {
 		t.Error("unknown region accepted")
 	}
 

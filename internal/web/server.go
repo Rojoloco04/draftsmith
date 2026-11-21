@@ -101,6 +101,7 @@ type Server struct {
 	status   Status
 	refresh  func() bool
 	settings SettingsStore
+	theme    string
 	cs       champSelect
 	// importRunes, if set, puts a rune page in the League client.
 	importRunes RuneImporter
@@ -136,6 +137,24 @@ func (s *Server) SetStatus(f func(*Status)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	f(&s.status)
+}
+
+// SetTheme picks the dashboard's theme: "dark", "light", or "" to follow
+// the system.
+func (s *Server) SetTheme(theme string) {
+	if theme != "dark" && theme != "light" {
+		theme = ""
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.theme = theme
+}
+
+// Theme is the theme picked in settings, "" for the system's.
+func (s *Server) Theme() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.theme
 }
 
 // SetAccounts replaces the tracked accounts (after the settings page adds
@@ -227,6 +246,9 @@ type Base struct {
 	// Rank is the latest snapshot for the header (solo queue unless flex
 	// is selected); nil before the first one.
 	Rank *db.RankSnapshot
+	// Theme is "dark" or "light" when picked in settings, "" to follow
+	// the system.
+	Theme string
 }
 
 type queueOpt struct {
@@ -255,7 +277,7 @@ func (s *Server) base(r *http.Request, title, nav string) Base {
 	acct := s.account(r)
 	b := Base{
 		Title: title, Nav: nav, Path: r.URL.Path, RiotID: "All accounts", Account: acct, Accounts: s.accts(),
-		Queue: queueFrom(r), Queues: queueOpts,
+		Queue: queueFrom(r), Queues: queueOpts, Theme: s.Theme(),
 		Status: s.getStatus(), Sync: s.syncView(false), Now: time.Now(),
 	}
 	if acct != nil {

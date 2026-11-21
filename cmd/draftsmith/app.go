@@ -17,8 +17,8 @@ import (
 //go:embed winres/icon.ico
 var appIcon []byte
 
-// logOut is where serve logs: the console, or a log file once a
-// double-clicked app has hidden its console.
+// logOut is where serve logs: the console, or a log file when the app
+// runs in the background with no console.
 var logOut io.Writer = os.Stdout
 
 // appWindow shows url in Draftsmith's own window and returns when the
@@ -26,6 +26,7 @@ var logOut io.Writer = os.Stdout
 func appWindow(ctx context.Context, url string, logger *log.Logger) error {
 	return appwin.Run(ctx, appwin.Options{
 		URL: url, Title: "Draftsmith", Width: 1280, Height: 860, Icon: appIcon, Log: logger,
+		Theme: os.Getenv("DRAFTSMITH_THEME"),
 	})
 }
 

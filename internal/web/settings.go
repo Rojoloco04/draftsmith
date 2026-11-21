@@ -19,7 +19,7 @@ type SettingsStore interface {
 	Settings() Settings
 	// SetKey checks key with Riot and saves it.
 	SetKey(ctx context.Context, key string) error
-	SetOptions(ctx context.Context, platform, queues string, overlay bool) error
+	SetOptions(ctx context.Context, platform, queues, theme string, overlay bool) error
 	// AddAccount looks riotID up and tracks it, returning the Riot ID as
 	// Riot spells it.
 	AddAccount(ctx context.Context, riotID string) (string, error)
@@ -36,6 +36,7 @@ type Settings struct {
 	KeyHint  string
 	Platform string
 	Queues   string // solo, flex or both
+	Theme    string // dark, light, or "" for the system's
 	Overlay  bool
 	Accounts []SettingsAccount
 	// File is where the settings are saved.
@@ -175,7 +176,16 @@ func (s *Server) settingsKey(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) settingsOptions(w http.ResponseWriter, r *http.Request) {
 	s.settingsChange(w, r, "options", func(st SettingsStore) (string, error) {
-		err := st.SetOptions(r.Context(), r.PostFormValue("platform"), r.PostFormValue("queues"), r.PostFormValue("overlay") == "on")
+		theme := r.PostFormValue("theme")
+		if theme != "dark" && theme != "light" {
+			theme = ""
+		}
+		err := st.SetOptions(r.Context(), r.PostFormValue("platform"), r.PostFormValue("queues"), theme, r.PostFormValue("overlay") == "on")
+		if err == nil && theme != s.Theme() {
+			s.SetTheme(theme)
+			// The theme is on <html>: reload the whole page to show it.
+			w.Header().Set("HX-Refresh", "true")
+		}
 		return "Saved.", err
 	})
 }

@@ -1,9 +1,9 @@
 {{define "layout"}}<!doctype html>
-<html lang="en">
+<html lang="en"{{with .Theme}} data-theme="{{.}}"{{end}}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="{{with .Theme}}{{.}}{{else}}light dark{{end}}">
 <title>{{.Title}} · Draftsmith</title>
 <link rel="stylesheet" href="{{asset "style.css"}}">
 <link rel="icon" href="{{asset "icon.svg"}}" type="image/svg+xml">

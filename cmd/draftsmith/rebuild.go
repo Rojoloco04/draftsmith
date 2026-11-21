@@ -3,85 +3,102 @@ package main
 import (
 	"bufio"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
-// rebuiltEnv is set on the child a rebuild starts, so it doesn't check again.
+// rebuiltEnv is set on a process started after a rebuild check, so it
+// doesn't check again.
 const rebuiltEnv = "DRAFTSMITH_REBUILT"
 
 const modulePath = "github.com/rojoloco04/draftsmith"
 
-// rebuildIfChanged runs when the exe starts with no arguments from its
-// source checkout. It runs `go build` over itself, and if that changes the
-// binary, runs the new one with the same arguments and exits with its code.
-// Anything that stops it (no Go on PATH, a compile error) is reported and
-// the current binary carries on, so a broken edit never stops a game.
-func rebuildIfChanged(out io.Writer) {
-	if os.Getenv(rebuiltEnv) != "" {
-		return
-	}
+// exePath is this executable, symlinks resolved.
+func exePath() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
-		return
+		return "", err
 	}
-	if exe, err = filepath.EvalSymlinks(exe); err != nil {
-		return
+	return filepath.EvalSymlinks(exe)
+}
+
+// rebuildIfChanged runs when the exe starts with no command from its
+// source checkout. It builds the source to a scratch file and, only if
+// that differs from the running exe, swaps it in (the running exe moves
+// aside to <name>~, since Windows can't overwrite a running program) and
+// reports true: the caller then starts the new build. An unchanged build
+// is thrown away, so nothing is renamed. Anything that stops it (no Go on
+// PATH, a compile error) is reported and the current binary carries on,
+// so a broken edit never stops a game.
+func rebuildIfChanged(out io.Writer) bool {
+	if os.Getenv(rebuiltEnv) != "" {
+		return false
+	}
+	exe, err := exePath()
+	if err != nil {
+		return false
 	}
 	dir := filepath.Dir(exe)
-	// Go renames a running exe to <name>~ to replace it; the last run's
-	// copy can go now that nothing runs it.
-	os.Remove(exe + "~")
 	if !isCheckout(dir) {
-		return
+		return false
 	}
 	goBin, err := exec.LookPath("go")
 	if err != nil {
 		fmt.Fprintln(out, "not checking for code changes: Go isn't on PATH")
-		return
+		return false
 	}
 
-	before, err := fileHash(exe)
-	if err != nil {
-		return
-	}
 	fmt.Fprintln(out, "checking for code changes...")
-	build := exec.Command(goBin, "build", "-o", exe, "./cmd/draftsmith")
+	fresh := strings.TrimSuffix(exe, ".exe") + ".new.exe"
+	defer os.Remove(fresh) // gone once renamed, or if anything fails
+	build := exec.Command(goBin, "build", "-o", fresh, "./cmd/draftsmith")
 	build.Dir = dir
 	if msg, err := build.CombinedOutput(); err != nil {
 		fmt.Fprintf(out, "rebuild failed, running the existing build:\n%s\n", strings.TrimSpace(string(msg)))
-		return
+		return false
 	}
-	after, err := fileHash(exe)
-	if err != nil || after == before {
-		return
+	before, err1 := fileHash(exe)
+	after, err2 := fileHash(fresh)
+	if err1 != nil || err2 != nil || before == after {
+		return false
 	}
-
+	old := exe + "~"
+	os.Remove(old)
+	if err := os.Rename(exe, old); err != nil {
+		fmt.Fprintf(out, "rebuilt, but couldn't move the running exe aside: %v\n", err)
+		return false
+	}
+	if err := os.Rename(fresh, exe); err != nil {
+		os.Rename(old, exe)
+		fmt.Fprintf(out, "rebuilt, but couldn't put the new exe in place: %v\n", err)
+		return false
+	}
 	fmt.Fprintln(out, "code changed: rebuilt, starting the new version")
-	child := exec.Command(exe, os.Args[1:]...)
-	child.Dir, _ = os.Getwd()
-	child.Env = append(os.Environ(), rebuiltEnv+"=1")
-	child.Stdin, child.Stdout, child.Stderr = os.Stdin, os.Stdout, os.Stderr
-	// Ctrl+C reaches the child too (same console); let it shut down and
-	// exit with it rather than dying first.
-	signal.Ignore(os.Interrupt)
-	err = child.Run()
-	var exit *exec.ExitError
-	switch {
-	case errors.As(err, &exit):
-		os.Exit(exit.ExitCode())
-	case err != nil:
-		fmt.Fprintln(out, "error: starting the rebuilt exe:", err)
-		waitForEnter()
-		os.Exit(1)
+	return true
+}
+
+// removeOldExe deletes the <name>~ a rebuild left. The old process may
+// still be running it for a moment (Windows won't delete a running exe),
+// so it keeps trying for a few seconds in the background.
+func removeOldExe() {
+	exe, err := exePath()
+	if err != nil {
+		return
 	}
-	os.Exit(0)
+	old := exe + "~"
+	go func() {
+		for range 20 {
+			if err := os.Remove(old); err == nil || os.IsNotExist(err) {
+				return
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+	}()
 }
 
 // isCheckout reports whether dir is Draftsmith's source tree.

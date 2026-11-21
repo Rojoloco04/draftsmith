@@ -78,6 +78,13 @@
           <option value="both"{{if eq .Settings.Queues "both"}} selected{{end}}>Both</option>
         </select>
       </label>
+      <label class="set-field"><span>Theme</span>
+        <select name="theme"{{if not .Local}} disabled{{end}}>
+          <option value=""{{if not .Settings.Theme}} selected{{end}}>Match Windows</option>
+          <option value="dark"{{if eq .Settings.Theme "dark"}} selected{{end}}>Dark</option>
+          <option value="light"{{if eq .Settings.Theme "light"}} selected{{end}}>Light</option>
+        </select>
+      </label>
       <label class="set-check"><input type="checkbox" name="overlay"{{if .Settings.Overlay}} checked{{end}}{{if not .Local}} disabled{{end}}>
         <span>Champ select overlay beside the League client <span class="muted">(takes effect next start)</span></span>
       </label>

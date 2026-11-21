@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"sort"
@@ -34,7 +35,9 @@ const usage = `draftsmith: ranked League of Legends stats from your own match ar
 Usage:
   draftsmith                          the desktop app: the dashboard in its own window,
                                       background sync, champ select, the overlay and the
-                                      in-game build (same as double-clicking the exe)
+                                      in-game build (same as double-clicking the exe). It
+                                      runs in the background and logs to data/draftsmith.log
+  draftsmith --debug                  the same, kept in this terminal with its log here
   draftsmith sync    [flags]          archive ranked games (and today's rank) from the Riot API
   draftsmith serve   [flags]          run the dashboard (and sync in the background)
   draftsmith reindex [flags]          rebuild the dashboard's SQLite index from the archive
@@ -52,6 +55,7 @@ current directory (the app's Settings page writes it):
   DRAFTSMITH_PLATFORM   na1, euw1, kr, ... (default na1)
   DRAFTSMITH_QUEUES     solo, flex or both (default solo)
   DRAFTSMITH_OVERLAY    off to keep the champ select overlay closed
+  DRAFTSMITH_THEME      dark or light (default: follow Windows)
   DRAFTSMITH_DATA       archive directory (default ./data)
   DRAFTSMITH_LEAGUE_DIR League install directory, for watch
 
@@ -64,35 +68,14 @@ Run "draftsmith <command> -h" for command flags.
 `
 
 func main() {
-	bare := len(os.Args) < 2
-	if bare {
-		useExeDir()
-		appwin.MarkOwnConsole()
-		rebuildIfChanged(os.Stderr)
+	debug := len(os.Args) == 2 && os.Args[1] == "--debug"
+	if len(os.Args) < 2 || debug {
+		runApp(debug)
+		return
 	}
 	loadDotEnv(".env")
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-
-	if bare {
-		// No command: run everything as a desktop app, the way a
-		// double-click wants it. The console a double-click opens is
-		// hidden and the log goes to a file; from a terminal it stays.
-		hidden := appwin.HideOwnConsole()
-		if hidden {
-			logOut = openLogFile(env("DRAFTSMITH_DATA", "data"))
-		}
-		if err := cmdServe(ctx, []string{"--app"}); err != nil {
-			if hidden {
-				appwin.Alert("Draftsmith", "Draftsmith couldn't start:\n\n"+sentenceCase(err.Error()))
-			} else {
-				fmt.Fprintln(os.Stderr, "error:", err)
-				waitForEnter()
-			}
-			os.Exit(1)
-		}
-		return
-	}
 
 	var err error
 	switch os.Args[1] {
@@ -659,13 +642,6 @@ func useExeDir() {
 	os.Chdir(filepath.Dir(exe))
 }
 
-// waitForEnter keeps a double-clicked console open so an error can be read
-// before the window closes.
-func waitForEnter() {
-	fmt.Fprint(os.Stderr, "\nPress Enter to close.")
-	bufio.NewReader(os.Stdin).ReadString('\n')
-}
-
 // loadDotEnv sets KEY=VALUE lines from path without overriding real env vars.
 func loadDotEnv(path string) {
 	f, err := os.Open(path)
@@ -690,6 +666,72 @@ func loadDotEnv(path string) {
 			os.Setenv(k, v)
 		}
 	}
+}
+
+// detachedEnv marks the background copy of the app that a launch starts.
+const detachedEnv = "DRAFTSMITH_DETACHED"
+
+// runApp is a start with no command (a double-click, or `draftsmith` in a
+// terminal): the desktop app. Normally the launcher checks for code
+// changes, starts the app again in the background with no console, and
+// exits, so no terminal window hangs around; the background copy logs to
+// data/draftsmith.log and reports a failed start in a message box. With
+// --debug it stays in the terminal and logs there.
+func runApp(debug bool) {
+	useExeDir()
+	removeOldExe()
+	detached := os.Getenv(detachedEnv) != ""
+	if !detached {
+		changed := rebuildIfChanged(os.Stderr)
+		exe, err := exePath()
+		switch {
+		case err != nil:
+		case !debug && canDetach:
+			if err := startDetached(exe, detachedEnv+"=1", rebuiltEnv+"=1"); err == nil {
+				return
+			}
+			fmt.Fprintln(os.Stderr, "couldn't start in the background, running here:", err)
+		case changed:
+			os.Exit(runRebuilt(exe))
+		}
+	}
+
+	loadDotEnv(".env")
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	if detached {
+		logOut = openLogFile(env("DRAFTSMITH_DATA", "data"))
+	}
+	if err := cmdServe(ctx, []string{"--app"}); err != nil {
+		if detached {
+			appwin.Alert("Draftsmith", "Draftsmith couldn't start:\n\n"+sentenceCase(err.Error()))
+		} else {
+			fmt.Fprintln(os.Stderr, "error:", err)
+		}
+		os.Exit(1)
+	}
+}
+
+// runRebuilt runs the freshly built exe in this console with the same
+// arguments and returns its exit code (--debug keeps its log here).
+func runRebuilt(exe string) int {
+	child := exec.Command(exe, os.Args[1:]...)
+	child.Dir, _ = os.Getwd()
+	child.Env = append(os.Environ(), rebuiltEnv+"=1")
+	child.Stdin, child.Stdout, child.Stderr = os.Stdin, os.Stdout, os.Stderr
+	// Ctrl+C reaches the child too (same console); let it shut down and
+	// exit with it rather than dying first.
+	signal.Ignore(os.Interrupt)
+	err := child.Run()
+	var exit *exec.ExitError
+	switch {
+	case errors.As(err, &exit):
+		return exit.ExitCode()
+	case err != nil:
+		fmt.Fprintln(os.Stderr, "error: starting the rebuilt exe:", err)
+		return 1
+	}
+	return 0
 }
 
 // sentenceCase capitalizes an error message for a dialog.
