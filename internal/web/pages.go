@@ -69,6 +69,7 @@ type overviewData struct {
 	TopChamps []analysis.Group
 	Recent    []analysis.Game
 	RoleMax   int
+	Proto     bool // PROTOTYPE: show the variant switcher
 }
 
 func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
@@ -116,6 +117,12 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 	for _, g := range sum.Roles {
 		d.RoleMax = max(d.RoleMax, g.Games)
 	}
+	// PROTOTYPE: ?variant= switches to the redesign prototypes.
+	if v := protoVariant(r); v != "" && v != "0" && len(sum.Games) > 0 {
+		s.protoOverview(w, r, d, v)
+		return
+	}
+	d.Proto = protoVariant(r) != ""
 	s.render(w, r, "overview", "", d)
 }
 

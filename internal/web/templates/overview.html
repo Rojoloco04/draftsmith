@@ -1,4 +1,5 @@
 {{define "content"}}
+{{if .Proto}}{{template "protoSwitch" dict "Variant" "0" "Queue" .Queue.Key}}{{end}}
 <div class="pagehead">
   <h1>Overview</h1>
   {{template "queueSwitch" .Base}}
