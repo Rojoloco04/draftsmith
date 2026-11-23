@@ -1,6 +1,7 @@
 package web
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/rojoloco04/draftsmith/internal/liveclient"
@@ -68,5 +69,57 @@ func TestGameBuildTracksItems(t *testing.T) {
 	}
 	if g.NextSkill != "" {
 		t.Errorf("no points to spend, got %q", g.NextSkill)
+	}
+}
+
+// Before anything is bought (only the trinket), the starting set is next.
+func TestGameBuildStartingItems(t *testing.T) {
+	snap := &liveclient.Snapshot{Level: 1, Skills: map[string]int{},
+		Items: []liveclient.Item{{ID: 3340, Name: "Stealth Ward", Count: 1, Slot: 6}}}
+	g := newGameBuild(gameTestBuild, "16.23", snap)
+	if g.NextStart != &g.Start[0] || g.Next != nil {
+		t.Fatalf("next should be the starting set: start %v, next %+v", g.NextStart, g.Next)
+	}
+	for _, it := range g.Start[0].Items {
+		if !it.Next {
+			t.Errorf("starting item %d not marked next", it.ID)
+		}
+	}
+	if g.NextSkill != "Q" {
+		t.Errorf("first point: %q", g.NextSkill)
+	}
+
+	// Once something's bought, it's the core again.
+	snap.Items = append(snap.Items, liveclient.Item{ID: 1056, Name: "Doran's Ring", Count: 1})
+	g = newGameBuild(gameTestBuild, "16.23", snap)
+	if g.NextStart != nil || g.Next == nil || g.Next.ID != 6655 {
+		t.Errorf("after buying: start %v, next %+v", g.NextStart, g.Next)
+	}
+}
+
+// Points spent in another order than OP.GG's still line up: the next
+// step is the first one they don't cover.
+func TestGameBuildSkillsOffOrder(t *testing.T) {
+	// The order is Q W E Q Q R; I took Q, Q, E.
+	snap := &liveclient.Snapshot{Level: 4, Skills: map[string]int{"Q": 2, "E": 1}}
+	g := newGameBuild(gameTestBuild, "16.23", snap)
+	if g.NextSkill != "W" || !g.Order[1].Next {
+		t.Errorf("next should be the W I skipped: %q, %+v", g.NextSkill, g.Order)
+	}
+	if !g.Order[0].Done || g.Order[1].Done || !g.Order[2].Done || !g.Order[3].Done || g.Order[4].Done {
+		t.Errorf("done steps: %+v", g.Order)
+	}
+}
+
+// OP.GG's 15 levels run on to 18: R at 16, then the basic ability that
+// isn't maxed yet.
+func TestFullOrder(t *testing.T) {
+	order := strings.Split("Q E W Q Q R Q E Q E R E E W W", " ")
+	max := &meta.SkillMax{IDs: []string{"Q", "E", "W"}}
+	if got := strings.Join(fullOrder(order, max), " "); got != "Q E W Q Q R Q E Q E R E E W W R W W" {
+		t.Errorf("full order: %s", got)
+	}
+	if got := fullOrder(order[:6], max); len(got) != 6 {
+		t.Errorf("a short order should be left alone: %v", got)
 	}
 }

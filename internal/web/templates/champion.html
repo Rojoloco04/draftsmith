@@ -28,8 +28,12 @@
 {{else}}
 {{template "tiles" .Stats.Stats}}
 
-<div class="grid two">
-  <section class="card">
+{{/* The record card only has something the hero and tiles don't with
+     several roles or enough games for the chart; otherwise matchups get
+     the row. */}}
+{{$record := or (gt (len .Roles) 1) .WRChart}}
+<div class="grid{{if $record}} two{{end}}">
+  {{if $record}}<section class="card">
     <h2>Record</h2>
     <p>Adjusted win rate <strong class="{{if ge .Stats.Games 5}}{{wrClass .Stats.Adjusted}}{{end}}">{{pct .Stats.Adjusted}}</strong>
       <span class="muted">(raw {{pct .Stats.WinRate}} over {{.Stats.Games}} game{{if ne .Stats.Games 1}}s{{end}}; your overall {{pct .Overall}})</span></p>
@@ -40,7 +44,7 @@
     </table></div>
     {{end}}
     {{if .WRChart}}<div class="legend"><span class="key s1"></span>Last 20 <span class="key s2"></span>Last 10</div>{{.WRChart}}{{end}}
-  </section>
+  </section>{{end}}
 
   <section class="card">
     <h2>Matchups</h2>

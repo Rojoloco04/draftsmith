@@ -168,7 +168,7 @@ func cmdServe(ctx context.Context, args []string) error {
 			select {
 			case <-ctl.ready:
 			default:
-				srv.WatchStarted("suggestions start once the first sync is done")
+				srv.WatchStarted("waiting for your first sync to finish")
 				select {
 				case <-ctl.ready:
 				case <-ctx.Done():

@@ -27,20 +27,40 @@ var funcs = template.FuncMap{
 	},
 	"pos":         meta.PositionName,
 	"clientPhase": clientPhase,
-	"csPhase":     champSelectPhase,
-	"metaOff":     func(err error) bool { return errors.Is(err, errMetaOff) },
-	"signed":      analysis.Signed,
-	"num":         analysis.Num,
-	"role":        analysis.RoleName,
-	"champ":       champName,
-	"champImg":    champImg,
-	"itemImg":     itemImg,
-	"nameAt": func(names []string, i int) string {
-		if i < len(names) {
-			return names[i]
+	"inGame":      inGame,
+	"contains":    strings.Contains,
+	// period ends a note with a full stop if it hasn't one.
+	"period": func(s string) string {
+		if s == "" || strings.HasSuffix(s, ".") {
+			return s
 		}
-		return ""
+		return s + "."
 	},
+	// runs is a build choice's items with repeats folded into a count
+	// ("Health Potion x2"), for the locked-in build's rows.
+	"runs": func(c meta.Choice) []buildItem {
+		var out []buildItem
+		for i, id := range c.IDs {
+			if n := len(out); n > 0 && out[n-1].ID == id {
+				out[n-1].Count++
+				continue
+			}
+			name := fmt.Sprint(id)
+			if i < len(c.Names) && c.Names[i] != "" {
+				name = c.Names[i]
+			}
+			out = append(out, buildItem{ID: id, Name: name, Count: 1})
+		}
+		return out
+	},
+	"csPhase":    champSelectPhase,
+	"metaOff":    func(err error) bool { return errors.Is(err, errMetaOff) },
+	"signed":     analysis.Signed,
+	"num":        analysis.Num,
+	"role":       analysis.RoleName,
+	"champ":      champName,
+	"champImg":   champImg,
+	"itemImg":    itemImg,
 	"runeImg":    runeImg,
 	"runeName":   runeName,
 	"spellImg":   spellImg,

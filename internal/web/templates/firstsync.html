@@ -12,8 +12,8 @@
 {{define "progress"}}
 <div id="progress" class="forge-progress" hx-get="/first-sync" hx-trigger="every 2s" hx-swap="outerHTML">
   <p class="forge-stage">{{if .Stage}}{{.Stage}}{{else if .LastError}}Sync stopped{{else}}Starting…{{end}}</p>
-  <div class="forge-bar{{if not .Total}} idle{{end}}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{.Percent}}"><span style="width: {{.Percent}}%"></span></div>
+  <div class="forge-bar{{if and .LastError (not .Syncing)}} stopped{{else if not .Total}} idle{{end}}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{.Percent}}"><span style="width: {{.Percent}}%"></span></div>
   <p class="forge-count">{{if .Total}}<strong>{{.Done}}</strong> of {{.Total}} games{{with .Left}} · {{.}}{{end}}{{else}}&nbsp;{{end}}</p>
-  {{if and .LastError (not .Syncing)}}<p class="set-msg neg" role="alert">{{.LastError}} <a href="/settings">Check your settings</a>.</p>{{end}}
+  {{if and .LastError (not .Syncing)}}<p class="set-msg neg" role="alert">{{if contains .LastError "Settings"}}{{.LastError}} <a href="/settings">Open Settings</a>.{{else}}{{.LastError}} <a href="/settings">Check your settings</a>.{{end}}</p>{{end}}
 </div>
 {{end}}

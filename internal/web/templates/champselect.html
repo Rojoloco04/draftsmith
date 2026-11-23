@@ -31,31 +31,44 @@
   <div class="gb-now">
     <div class="gb-have">
       <span class="label">Your items</span>
-      <span class="build-items">{{range $b.Items}}{{template "item" (dict "I" . "Patch" $gp)}}{{else}}<span class="muted small">Nothing yet</span>{{end}}</span>
+      <span class="build-items it-wrap">{{range $b.Items}}{{template "item" (dict "I" . "Patch" $gp)}}{{else}}<span class="muted small">Nothing yet</span>{{end}}</span>
     </div>
-    {{with $b.Next}}<div class="gb-next"><span class="label">Buy next</span>{{template "item" (dict "I" . "Patch" $gp)}}<strong>{{.Name}}</strong></div>{{end}}
+    {{with $b.NextStart}}<div class="gb-next"><span class="label">Buy first</span><span class="build-items">{{range .Items}}{{template "item" (dict "I" . "Patch" $gp)}}{{end}}</span><strong>Starting items</strong></div>
+    {{else}}{{with $b.Next}}<div class="gb-next"><span class="label">Buy next</span>{{template "item" (dict "I" . "Patch" $gp)}}<strong>{{.Name}}</strong></div>{{end}}{{end}}
     {{with $b.NextSkill}}<div class="gb-next"><span class="label">Level up</span><b class="key k-{{.}}">{{.}}</b></div>{{end}}
   </div>
   {{else if .LiveErr}}<p class="muted small gb-wait"><span class="spin"></span>Waiting for the game to load to track your items.</p>
   {{end}}
-  {{if eq $p.RunesState "loading"}}<p class="muted"><span class="spin"></span>Loading the build from OP.GG…</p>
-  {{else if $p.Build.Empty}}<p class="muted">OP.GG had no build for {{$p.Name}} {{pos .Position}}.</p>
-  {{else}}{{template "gameBuild" $b}}{{end}}
-  {{with $p.Spells.IDs}}<div class="spell-row cs-spells"><span class="label">Spells</span>{{range .}}{{template "spell" (dict "ID" . "Patch" $gp)}}<span>{{spellName .}}</span>{{end}}</div>{{end}}
-  {{if eq $p.RunesState "ok"}}
-  <details class="cs-runes" data-key="{{$p.Key}}">
-    <summary><span class="label">Runes</span><span class="loadout"><span class="pair runes">{{with $p.Runes.Primary}}{{template "rune" (index . 0)}}{{end}}</span><span class="pair runes">{{template "rune" $p.Runes.SubStyle}}</span></span></summary>
-    {{template "runePage" (opggRunes $p.Runes)}}
-  </details>
-  {{end}}
+  <div class="gb-cols">
+    <div class="gb-main">
+      {{if eq $p.RunesState "loading"}}<p class="muted gb-note"><span class="spin"></span>Loading the build from OP.GG…</p>
+      {{else if $p.Build.Empty}}<p class="muted gb-note">OP.GG had no build for {{$p.Name}}{{with .Position}} {{pos .}}{{end}}.</p>
+      {{else}}{{template "gameItems" $b}}{{end}}
+    </div>
+    <div class="gb-side">
+      {{if not $p.Build.Empty}}{{template "gameSkills" $b}}{{end}}
+      {{with $p.Spells.IDs}}<div class="spell-row cs-spells"><span class="label">Spells</span>{{range .}}{{template "spell" (dict "ID" . "Patch" $gp)}}<span>{{spellName .}}</span>{{end}}</div>{{end}}
+      {{if eq $p.RunesState "ok"}}
+      <details class="cs-runes" data-key="{{$p.Key}}" open>
+        <summary><span class="label">Runes{{if $p.RunesVs.Key}} vs {{$p.RunesVs.Name}}{{end}}</span><span class="loadout"><span class="pair runes">{{with $p.Runes.Primary}}{{template "rune" (index . 0)}}{{end}}</span><span class="pair runes">{{template "rune" $p.Runes.SubStyle}}</span></span></summary>
+        {{template "runePage" (opggRunes $p.Runes)}}
+      </details>
+      {{end}}
+    </div>
+  </div>
 </article>
 {{end}}
 {{else if not .Have}}
 <section class="card empty cs-wait">
   <span class="cs-status{{if .Phase}} up{{end}}"><span class="dot"></span>{{clientPhase .Phase}}</span>
-  <h1>Champ select</h1>
+  {{if eq .Phase "ChampSelect"}}<h1>Champ select</h1>
+  <p class="muted"><span class="spin"></span>Reading the draft…</p>
+  {{else if inGame .Phase}}<h1>In game</h1>
+  <p class="muted">Draftsmith didn't see this game's champ select, so it has no build to show. It follows the build for games you lock in while it's running.</p>
+  {{else}}<h1>Champ select</h1>
   <p class="muted">Your teams, suggestions and runes show up here as soon as champ select starts.</p>
-  {{with .Note}}<p class="neg">Suggestions are off: {{.}}</p>{{end}}
+  {{end}}
+  {{with .Note}}<p class="neg">Suggestions are off: {{period .}}</p>{{end}}
 </section>
 {{else}}{{$left := .Left}}{{$import := .CanImport}}{{with .Board}}{{$patch := .Patch}}
 <div class="cs-head">
@@ -99,7 +112,7 @@
 <div class="cs-slot{{if $s.Me}} me{{end}}{{if $s.Locked}} locked{{else if $s.Key}} hover{{else}} open{{end}}">
   <span class="icon lg" data-initials="{{initials $s.Name}}">{{if $s.Key}}<img src="{{champImg $s.Key $.Patch}}" alt="" width="48" height="48">{{end}}</span>
   <span class="cs-slot-text">
-    <strong>{{if $s.Name}}{{$s.Name}}{{else if $s.Me}}You{{else}}<span class="muted">Picking…</span>{{end}}</strong>
+    <strong>{{if $s.Name}}{{$s.Name}}{{else if $s.Me}}You{{else}}<span class="muted picking">Picking…</span>{{end}}</strong>
     <span class="muted role-line">
       {{if $s.Position}}{{template "role" $s.Position}}<span class="pos-name">{{pos $s.Position}}</span>{{if $.Enemy}} {{pct $s.Odds}}{{end}}{{end}}
       {{if and $s.Me $s.Name}}<b class="tag">You</b>{{end}}{{if $s.Autofill}}<b class="tag">Autofill</b>{{end}}{{if and $s.Key (not $s.Locked)}}<b class="tag soft">Hover</b>{{end}}
@@ -119,8 +132,7 @@
     <div class="cs-pick-name">
       {{if .Locked}}<span class="label">Locked in</span>{{else if $p.Mine}}<span class="label">Your hover</span>{{end}}
       <h2>{{$p.Name}}</h2>
-      {{if $p.Scored}}<span class="muted">You're {{$p.Wins}}-{{sub $p.Games $p.Wins}} on it {{pos .Position}}
-        · {{if $p.InMeta}}{{template "tierBadge" $p.Meta.Tier}} {{pct1 $p.MetaWinRate}} Emerald+{{else}}not on OP.GG's {{pos .Position}} list{{end}}</span>
+      {{if $p.Scored}}<span class="muted">You're {{$p.Wins}}-{{sub $p.Games $p.Wins}} on it {{pos .Position}}<span class="cs-meta"><span class="cs-dot"> · </span>{{if $p.InMeta}}{{template "tierBadge" $p.Meta.Tier}} {{pct1 $p.MetaWinRate}} Emerald+{{else}}not on OP.GG's {{pos .Position}} list{{end}}</span></span>
       {{else}}<span class="muted">Not in your pool {{pos .Position}} yet.</span>{{end}}
       {{if $p.TeammateHovering}}<span class="tag warn">A teammate is hovering it</span>{{end}}
       {{with $p.CompNote}}<span class="tag comp{{if lt $p.Comp 0.0}} warn{{end}}">{{.}}</span>{{end}}
@@ -167,7 +179,7 @@
   {{range $row := (list (dict "Label" "Start" "C" .B.Starter) (dict "Label" "Boots" "C" .B.Boots) (dict "Label" "Core" "C" .B.Core))}}{{with $row.C}}{{$c := index . 0}}
   <div class="build-row">
     <span class="label">{{$row.Label}}</span>
-    <span class="build-items">{{range $i, $id := $c.IDs}}{{if $i}}{{if ne $row.Label "Start"}}<svg class="i sep" aria-hidden="true"><use href="#i-arrow"/></svg>{{end}}{{end}}<img src="{{itemImg $id $patch}}" alt="{{nameAt $c.Names $i}}" title="{{nameAt $c.Names $i}}" width="32" height="32" loading="lazy">{{end}}</span>
+    <span class="build-items">{{range $i, $it := runs $c}}{{if $i}}{{if ne $row.Label "Start"}}<svg class="i sep" aria-hidden="true"><use href="#i-arrow"/></svg>{{end}}{{end}}{{template "item" (dict "I" $it "Patch" $patch)}}{{end}}</span>
     <span class="muted small">{{pct $c.PickRate}} pick · {{pct1 $c.WinRate}} win</span>
   </div>
   {{end}}{{end}}
@@ -196,16 +208,23 @@
 </div>
 {{end}}
 
-{{/* The whole build for the game in progress (gameBuild): the options
-     OP.GG lists for starting items, core paths, boots, the 4th to 6th
-     items and late items, then skills. */}}
-{{define "gameBuild"}}{{$patch := .Patch}}
+{{/* The items for the game in progress (gameBuild): the options OP.GG
+     lists for starting items, core paths, boots, the 4th to 6th items and
+     late items. */}}
+{{define "gameItems"}}{{$patch := .Patch}}
 <div class="build gb">
-  {{with .Start}}<div class="gb-sec"><span class="label">Start</span><div class="gb-opts">{{range .}}{{template "buildOpt" (dict "O" . "Patch" $patch "Arrows" false)}}{{end}}</div></div>{{end}}
+  {{with .Start}}<div class="gb-sec{{if $.NextStart}} now{{end}}"><span class="label">Start</span><div class="gb-opts">{{range .}}{{template "buildOpt" (dict "O" . "Patch" $patch "Arrows" false)}}{{end}}</div></div>{{end}}
   {{with .Core}}<div class="gb-sec"><span class="label">Core</span><div class="gb-opts">{{range .}}{{template "buildOpt" (dict "O" . "Patch" $patch "Arrows" true)}}{{end}}</div></div>{{end}}
   {{with .Boots}}<div class="gb-sec"><span class="label">Boots</span><div class="gb-opts">{{range .}}{{template "buildOpt" (dict "O" . "Patch" $patch "Arrows" false)}}{{end}}</div></div>{{end}}
   {{range .Slots}}<div class="gb-sec{{if .Next}} now{{end}}"><span class="label">{{.Label}}</span><div class="gb-opts">{{range .Options}}{{template "buildOpt" (dict "O" . "Patch" $patch "Arrows" false)}}{{end}}</div></div>{{end}}
   {{with .Situational}}<div class="gb-sec"><span class="label">Also built</span><div class="gb-opts"><span class="build-items it-wrap">{{range .}}{{template "item" (dict "I" . "Patch" $patch)}}{{end}}</span></div></div>{{end}}
+</div>
+{{end}}
+
+{{/* The skills for the game in progress (gameBuild): the max order and
+     the order by level, with the points I've spent and the next one. */}}
+{{define "gameSkills"}}{{if or .Max .Order}}
+<div class="build gb-skills">
   {{with .Max}}
   <div class="build-row">
     <span class="label">Skills</span>
@@ -214,7 +233,7 @@
   </div>
   {{end}}
   {{with .Order}}
-  <ol class="skill-order" aria-label="Skill order by level">{{range $i, $st := .}}<li class="k-{{$st.Key}}{{if $st.Done}} done{{end}}{{if $st.Next}} next{{end}}" title="Level {{add $i 1}}: {{$st.Key}}"><span>{{add $i 1}}</span>{{$st.Key}}</li>{{end}}</ol>
+  <ol class="skill-order" style="--n: {{len .}}" aria-label="Skill order by level">{{range $i, $st := .}}<li class="k-{{$st.Key}}{{if $st.Done}} done{{end}}{{if $st.Next}} next{{end}}" title="Level {{add $i 1}}: {{$st.Key}}"><span>{{add $i 1}}</span>{{$st.Key}}</li>{{end}}</ol>
   {{end}}
 </div>
-{{end}}
+{{end}}{{end}}

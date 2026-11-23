@@ -632,10 +632,18 @@ td.items img, td.items .slot { margin-right: 3px; }
 .skill-max .key { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; font-size: .8rem; font-weight: 750; color: #fff; }
 .k-Q { --k: var(--s1); } .k-W { --k: var(--pos); } .k-E { --k: var(--gold); } .k-R { --k: var(--s3); }
 .skill-max .key { background: var(--k); }
-.skill-order { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 3px; }
+.skill-order { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(var(--n, 15), minmax(0, 1fr)); gap: 3px; }
 .skill-order li { display: flex; flex-direction: column; align-items: center; padding: 3px 0 4px; border-radius: 6px; font-size: .72rem; font-weight: 750; color: var(--k); background: color-mix(in srgb, var(--k) 14%, transparent); }
 .skill-order li span { font-size: .6rem; font-weight: 600; color: var(--muted); }
-.cs-game { max-width: 760px; }
+/* In game, wide windows put the skills, spells and runes beside the
+   items; narrow ones (the overlay, phones) stack them. */
+.gb-cols { display: grid; gap: 0 28px; }
+.gb-side > :first-child { margin-top: 14px; }
+.gb-note { margin: 14px 0 0; }
+@media (min-width: 1000px) {
+  body:not(.overlay) .gb-cols { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
+  body:not(.overlay) .gb-side .skill-order { grid-template-columns: repeat(9, minmax(0, 1fr)); }
+}
 
 /* The in-game build: every option per step, what I own, what's next. */
 .gb { gap: 12px; }
@@ -653,7 +661,8 @@ td.items img, td.items .slot { margin-right: 3px; }
 .it.next { box-shadow: 0 0 0 2px var(--accent); }
 .it .cnt { position: absolute; right: 1px; bottom: 0; font-size: .62rem; font-weight: 800; color: #fff; text-shadow: 0 0 3px #000, 0 0 2px #000; }
 .gb-now { margin-top: 14px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; }
-.gb-have, .gb-next { display: flex; align-items: center; gap: 10px; }
+.gb-have, .gb-next { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+.gb-now .label { white-space: nowrap; }
 .gb-have .it.have::after { display: none; }
 .gb-next .key { display: grid; place-items: center; width: 30px; height: 30px; border-radius: var(--radius-sm); font-weight: 800; color: #fff; background: var(--k); }
 .gb-wait { margin: 12px 0 0; }
@@ -723,6 +732,10 @@ body.overlay { min-height: 0; font-size: 13px; overflow-x: hidden; background: v
   .gb-sec > .label { padding-top: 0; }
 }
 .overlay .skill-order { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.overlay .gb-skills .skill-order { grid-template-columns: repeat(9, minmax(0, 1fr)); }
+.overlay .cs-meta { display: block; }
+.overlay .cs-dot { display: none; }
+.overlay .cs-slot-text .picking { display: none; }
 .overlay .cs-spells .sp { width: 24px; height: 24px; }
 .overlay .cs-spells .small { flex-basis: 100%; margin-left: 0; }
 .overlay .runepage { gap: 8px; }
@@ -730,6 +743,9 @@ body.overlay { min-height: 0; font-size: 13px; overflow-x: hidden; background: v
 html:has(body.overlay) { scrollbar-width: thin; }
 
 @media (max-width: 560px) {
+  .gb-skills .skill-order { grid-template-columns: repeat(9, minmax(0, 1fr)); }
+  .cs-meta { display: block; }
+  .cs-dot { display: none; }
   .cs-slot { padding: 6px 8px; gap: 8px; }
   .cs-slot .icon.lg { width: 36px; height: 36px; }
   .cs-pick-head { gap: 10px; flex-wrap: wrap; }
@@ -828,6 +844,7 @@ header.top { background: linear-gradient(var(--header-a), var(--header-b)); bord
 .forge-bar span { display: block; height: 100%; background: linear-gradient(90deg, #8a4b16, var(--gold), #ffe3a3);
   box-shadow: 0 0 12px var(--gold); transition: width .6s ease; }
 .forge-bar.idle span { width: 30% !important; animation: forge-idle 1.4s ease-in-out infinite alternate; }
+.forge-bar.stopped span { animation: none; transform: none; width: 0 !important; }
 @keyframes forge-idle { from { transform: translateX(-100%); } to { transform: translateX(333%); } }
 .forge-count { margin: 10px 0 0; font-variant-numeric: tabular-nums; color: var(--muted); }
 .forge-count strong { color: var(--heading); }

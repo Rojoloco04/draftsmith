@@ -113,3 +113,43 @@ func TestBoardCompAndHover(t *testing.T) {
 	_, body := get(t, ts, "/champ-select")
 	expect(t, body, "Your team", "mostly AD · 1 frontliner", "Your hover", "adds AP to a mostly AD team")
 }
+
+// In game without a champ select seen here (Draftsmith started or
+// restarted mid-game), the page says why there's no build instead of
+// waiting for champ select. In champ select before the first board, it's
+// reading the draft.
+func TestInGameUnseen(t *testing.T) {
+	srv, ts := newTestApp(t, nil)
+	srv.WatchStarted("")
+	srv.WatchPhase("InProgress")
+	_, body := get(t, ts, "/champ-select")
+	expect(t, body, "In game", "didn't see this game's champ select")
+	if strings.Contains(body, "as soon as champ select starts") {
+		t.Error("in game, the page still waits for champ select")
+	}
+
+	srv.WatchPhase(lcu.PhaseChampSelect)
+	_, body = get(t, ts, "/champ-select")
+	expect(t, body, "Reading the draft")
+
+	srv.WatchStarted("waiting for your first sync to finish")
+	srv.WatchPhase("Lobby")
+	_, body = get(t, ts, "/champ-select")
+	expect(t, body, "Suggestions are off: waiting for your first sync to finish.")
+}
+
+// The locked-in build folds repeated starting items into a count.
+func TestLockedBuildFoldsRepeats(t *testing.T) {
+	srv, ts := newTestApp(t, nil)
+	srv.WatchStarted("")
+	srv.WatchPhase(lcu.PhaseChampSelect)
+	b := testBoard()
+	b.Picks, b.Locked = b.Picks[:1], true
+	b.Picks[0].Build = testBuild()
+	srv.WatchBoard(b)
+	_, body := get(t, ts, "/champ-select")
+	if n := strings.Count(body, `alt="Health Potion"`); n != 1 {
+		t.Errorf("Health Potion shown %d times", n)
+	}
+	expect(t, body, `<b class="cnt">2</b>`)
+}

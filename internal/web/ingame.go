@@ -7,6 +7,10 @@ import (
 	"github.com/rojoloco04/draftsmith/internal/meta"
 )
 
+// trinketSlot is the inventory slot the Live Client Data API gives the
+// trinket.
+const trinketSlot = 6
+
 // How many options each part of the in-game build lists.
 const (
 	gameStarts = 2
@@ -38,8 +42,10 @@ type gameBuild struct {
 	Items     []buildItem
 	NextSkill string
 	// Next names the item to work toward: the first core item I don't
-	// have, then the most built option for the next slot.
-	Next *buildItem
+	// have, then the most built option for the next slot. Before I've
+	// bought anything, NextStart is the starting set instead.
+	Next      *buildItem
+	NextStart *buildOpt
 }
 
 // buildOpt is one option: a set of items (a starting set, a core path or
@@ -152,7 +158,7 @@ func newGameBuild(b meta.Build, patch string, s *liveclient.Snapshot) gameBuild 
 	}
 	var order []string
 	if len(b.Skills) > 0 {
-		order = b.Skills[0].Order
+		order = fullOrder(b.Skills[0].Order, g.Max)
 	}
 	for _, k := range order {
 		g.Order = append(g.Order, skillStep{Key: k})
@@ -165,16 +171,58 @@ func newGameBuild(b meta.Build, patch string, s *liveclient.Snapshot) gameBuild 
 	for _, it := range s.Items {
 		g.Items = append(g.Items, buildItem{ID: it.ID, Name: it.Name, Count: it.Count, Have: true})
 	}
-	spent := s.Spent()
-	for i := range g.Order {
-		g.Order[i].Done = i < spent
+	// A step is done when I've put a point in its ability for it, so
+	// leveling in another order than OP.GG's still lines up: the next
+	// step is the first one my points don't cover.
+	left := map[string]int{}
+	for k, n := range s.Skills {
+		left[k] = n
 	}
-	if spent < s.Level && spent < len(g.Order) {
-		g.Order[spent].Next = true
-		g.NextSkill = g.Order[spent].Key
+	for i := range g.Order {
+		if k := g.Order[i].Key; left[k] > 0 {
+			left[k]--
+			g.Order[i].Done = true
+		}
+	}
+	if s.Spent() < s.Level {
+		for i := range g.Order {
+			if !g.Order[i].Done {
+				g.Order[i].Next = true
+				g.NextSkill = g.Order[i].Key
+				break
+			}
+		}
 	}
 	g.markNext(b, s)
 	return g
+}
+
+// fullOrder extends OP.GG's skill order, which stops at level 15, to 18:
+// R at 16, then the points the basic abilities still need to max (the
+// last maxed first, when the max order is known). Orders of any other
+// shape are left as they are.
+func fullOrder(order []string, max *meta.SkillMax) []string {
+	if len(order) != 15 {
+		return order
+	}
+	n := map[string]int{}
+	for _, k := range order {
+		n[k]++
+	}
+	if n["R"] != 2 {
+		return order
+	}
+	out := append(append([]string(nil), order...), "R")
+	basics := []string{"Q", "W", "E"}
+	if max != nil && len(max.IDs) == 3 {
+		basics = []string{max.IDs[2], max.IDs[1], max.IDs[0]}
+	}
+	for _, k := range basics {
+		for ; n[k] < 5 && len(out) < 18; n[k]++ {
+			out = append(out, k)
+		}
+	}
+	return out
 }
 
 // markNext picks the item to buy toward. Finished items I own that OP.GG
@@ -182,6 +230,21 @@ func newGameBuild(b meta.Build, patch string, s *liveclient.Snapshot) gameBuild 
 // three, it's the first missing item of the most built core path; after,
 // the most built option for the next slot that I don't own.
 func (g *gameBuild) markNext(b meta.Build, s *liveclient.Snapshot) {
+	// Nothing bought yet (the trinket doesn't count): the starting set.
+	bought := false
+	for _, it := range s.Items {
+		if it.Slot != trinketSlot {
+			bought = true
+		}
+	}
+	if !bought && len(g.Start) > 0 {
+		st := &g.Start[0]
+		for i := range st.Items {
+			st.Items[i].Next = true
+		}
+		g.NextStart = st
+		return
+	}
 	finished := map[int]bool{}
 	for _, cs := range [][]meta.Choice{b.Core, b.Late, b.Slot(4), b.Slot(5), b.Slot(6)} {
 		for _, c := range cs {
